@@ -1,0 +1,81 @@
+/*******************************************************
+ * ESP8266 Utilizando a Porta Analogica
+ * 05/2019 - Felipe Buhrer
+ */
+
+ #include <DHT.h>;
+#define DHTPIN D3
+#define DHTTYPE DHT11
+
+DHT dht(DHTPIN, DHTTYPE);
+
+#define Vin 3.25             // define constante igual a 5.0
+#define T0 298.15           // define constante igual a 298.15 Kelvin
+#define Rt 10000            // Resistor do divisor de tensao
+#define R0 10000            // Valor da resistencia inicial do NTC
+#define T1 273.15           // [K] in datasheet 0o C
+#define T2 373.15           // [K] in datasheet 100° C
+#define RT1 35563           // [ohms] resistencia in T1
+#define RT2 549             // [ohms] resistencia in T2
+  float beta = 0.0;         // parametros iniciais [K]
+  float Rinf = 0.0;         // parametros iniciais [ohm]
+  float TempKelvin = 0.0;   // variable output
+  float TempCelsius = 0.0;  // variable output
+  float Vout = 0.0;         // Vout in A0
+  float Rout = 0.0; 
+
+void setup() {
+  Serial.begin(115200);
+  
+  beta = (log(RT1 / RT2)) / ((1 / T1) - (1 / T2));  // calculo de beta
+  Rinf = R0 * exp(-beta / T0);                      // calculo de Rinf
+  delay(100);
+
+  dht.begin();
+  
+  // Define pins as Outputs
+  pinMode(16, OUTPUT);
+  pinMode(5, OUTPUT);
+  pinMode(14, OUTPUT);
+  digitalWrite(16, LOW);
+  digitalWrite(5, LOW);
+  digitalWrite(14, LOW);
+}
+
+int readPin(const byte &p) {
+  int r;
+  digitalWrite(p, HIGH);
+  analogRead(A0);
+  r = analogRead(A0);
+  digitalWrite(p, LOW);
+  return r;
+}
+
+void loop() {
+  
+  Vout = Vin * ((float)(readPin(16)) / 940.0);  // calculo de V0 e leitura de A0
+  Rout = (Rt * Vout / (Vin - Vout));               // calculo de Rout
+  TempKelvin = (beta / log(Rout / Rinf));          // calculo da temp. em Kelvins
+  TempCelsius = TempKelvin - 273.15;               // calculo da temp. em Celsius
+  Serial.print("Temperatura em Celsius: ");        // imprime no monitor serial
+  Serial.print(TempCelsius);                       // imprime temperatura Celsius
+  Serial.print(" Temperatura em Kelvin: ");        // imprime no monitor serial
+  Serial.println(TempKelvin);                      // imprime temperatura Kelvins
+  delay(500);
+
+  Serial.print("0,1023,");
+  Serial.print(readPin(16)); Serial.print(",");
+  Serial.print(readPin(5)); Serial.print(",");
+  Serial.println(readPin(14));
+  delay(500);
+
+    delay(1000);
+  float h = DHT.readHumidity();
+  float t = DHT.readTemperature();
+  Serial.print("Humidade:");
+   Serial.print(h);
+Serial.print("%/t");
+     Serial.print("Temperatura:");
+      Serial.print(t);
+       Serial.print(" C°");
+}
