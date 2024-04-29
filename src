@@ -1,46 +1,185 @@
 /*******************************************************
- * ESP8266 Utilizando a Porta Analogica
- * 05/2019 - Felipe Buhrer
+ * ESP8266 Adding Sensors and Google Sheet Records
+ * 01/2024 - Felipe Buhrer
  */
 
- #include <DHT.h>;
-#define DHTPIN D3
+//Temperatura Termistor
+#define Vin 3.25          // define constante igual a 5.0
+#define T0 298.15         // define constante igual a 298.15 Kelvin
+#define Rt 10000          // Resistor do divisor de tensao
+#define R0 10000          // Valor da resistencia inicial do NTC
+#define T1 273.15         // [K] in datasheet 0o C
+#define T2 373.15         // [K] in datasheet 100° C
+#define RT1 35563         // [ohms] resistencia in T1
+#define RT2 549           // [ohms] resistencia in T2
+float beta = 0.0;         // parametros iniciais [K]
+float Rinf = 0.0;         // parametros iniciais [ohm]
+float TempKelvin = 0.0;   // variable output
+float TempCelsius = 0.0;  // variable output
+float Vout = 0.0;         // Vout in A0
+float Rout = 0.0;
+
+//Sensor DHT
+#include <DHT.h>
+#define DHTPIN 0
 #define DHTTYPE DHT11
-
 DHT dht(DHTPIN, DHTTYPE);
+float h = 0.0;
+float t = 0.0;
 
-#define Vin 3.25             // define constante igual a 5.0
-#define T0 298.15           // define constante igual a 298.15 Kelvin
-#define Rt 10000            // Resistor do divisor de tensao
-#define R0 10000            // Valor da resistencia inicial do NTC
-#define T1 273.15           // [K] in datasheet 0o C
-#define T2 373.15           // [K] in datasheet 100° C
-#define RT1 35563           // [ohms] resistencia in T1
-#define RT2 549             // [ohms] resistencia in T2
-  float beta = 0.0;         // parametros iniciais [K]
-  float Rinf = 0.0;         // parametros iniciais [ohm]
-  float TempKelvin = 0.0;   // variable output
-  float TempCelsius = 0.0;  // variable output
-  float Vout = 0.0;         // Vout in A0
-  float Rout = 0.0; 
+//Sensor Luminosidade 
+float lumPC = 0.0;
+
+//Sensor Umidade Solo
+float soilUm = 0.0;
+
+//WifiPingPlanilha
+#include <ESP8266WiFi.h>
+#include <WiFiClientSecure.h>
+#define ON_Board_LED 2  //--> Defining an On Board LED, used for indicators when the process of connecting to a wifi router
+const char* ssid = "your  ssid here";
+const char* password = "your password here";
+//----------------------------------------Host & httpsPort
+const char* host = "script.google.com";
+const int httpsPort = 443;
+//----------------------------------------
+WiFiClientSecure client; //--> Create a WiFiClientSecure object.
+String GAS_ID = "Insert your Sheet ID"; //--> spreadsheet script ID
 
 void setup() {
   Serial.begin(115200);
-  
+
+  //Termistor settings
   beta = (log(RT1 / RT2)) / ((1 / T1) - (1 / T2));  // calculo de beta
   Rinf = R0 * exp(-beta / T0);                      // calculo de Rinf
   delay(100);
 
-  dht.begin();
-  
   // Define pins as Outputs
   pinMode(16, OUTPUT);
-  pinMode(5, OUTPUT);
-  pinMode(14, OUTPUT);
   digitalWrite(16, LOW);
+  dht.begin();
+
+  //Fotoresistor setup
+   pinMode(14, OUTPUT);
+   digitalWrite(14, LOW);
+
+  //Soil Sensor Setup
+  pinMode(5, OUTPUT);
   digitalWrite(5, LOW);
-  digitalWrite(14, LOW);
+
+
+  //Settup Wifi Connection
+    WiFi.begin(ssid, password);  //--> Connect to your WiFi router
+  //Serial.println("");
+
+  pinMode(ON_Board_LED, OUTPUT);     //--> On Board LED port Direction output
+  digitalWrite(ON_Board_LED, HIGH);  //--> Turn off Led On Board
+
+  //----------------------------------------Wait for connection
+  Serial.print("Connecting");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    //----------------------------------------Make the On Board Flashing LED on the process of connecting to the wifi router.
+    digitalWrite(ON_Board_LED, LOW);
+    delay(250);
+    digitalWrite(ON_Board_LED, HIGH);
+    delay(250);
+    //----------------------------------------
+  }
+  //----------------------------------------
+  digitalWrite(ON_Board_LED, HIGH);  //--> Turn off the On Board LED when it is connected to the wifi router.
+  Serial.println("");
+  Serial.print("Successfully connected to : ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.println();
+  //----------------------------------------
+
+  client.setInsecure();  WiFi.begin(ssid, password);  //--> Connect to your WiFi router
+  //Serial.println("");
+
+  pinMode(ON_Board_LED, OUTPUT);     //--> On Board LED port Direction output
+  digitalWrite(ON_Board_LED, HIGH);  //--> Turn off Led On Board
+
+  //----------------------------------------Wait for connection
+  Serial.print("Connecting");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    //----------------------------------------Make the On Board Flashing LED on the process of connecting to the wifi router.
+    digitalWrite(ON_Board_LED, LOW);
+    delay(250);
+    digitalWrite(ON_Board_LED, HIGH);
+    delay(250);
+    //----------------------------------------
+  }
+  //----------------------------------------
+  digitalWrite(ON_Board_LED, HIGH);  //--> Turn off the On Board LED when it is connected to the wifi router.
+  Serial.println("");
+  Serial.print("Successfully connected to : ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.println();
+  //----------------------------------------
+
+  client.setInsecure();
+ 
 }
+
+// Subroutine for sending data to Google Sheets
+void sendData(float tem, int hum, float LumPC, float soilUm, float TempCelsius) {
+  Serial.println("==========");
+  Serial.print("connecting to ");
+  Serial.println(host);
+
+  //----------------------------------------Connect to Google host
+  if (!client.connect(host, httpsPort)) {
+    Serial.println("connection failed");
+    return;
+  }
+  //----------------------------------------
+
+  //-----------Processing data and sending data
+  String string_temperature = String(tem);
+  // String string_temperature =  String(tem, DEC);
+  String string_humidity = String(hum, DEC);
+  String string_luminosidade = String(LumPC);
+  String string_soilHumidity = String(soilUm);
+  String string_TempVaristor = String(TempCelsius);
+
+  String url = "/macros/s/" + GAS_ID + "/exec?temperature=" + string_temperature + "&humidity=" + string_humidity + "&Luminosidade=" + string_luminosidade + "&UmidadeSolo=" + string_soilHumidity + "&TempVaris=" + string_TempVaristor;
+  Serial.print("requesting URL: ");
+  Serial.println(url);
+
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "User-Agent: BuildFailureDetectorESP8266\r\n" + "Connection: close\r\n\r\n");
+
+  Serial.println("request sent");
+  //----------------------------------------
+
+  //------------Checking whether the data was sent successfully or not
+  while (client.connected()) {
+    String line = client.readStringUntil('\n');
+    if (line == "\r") {
+      Serial.println("headers received");
+      break;
+    }
+  }
+  String line = client.readStringUntil('\n');
+  if (line.startsWith("{\"state\":\"success\"")) {
+    Serial.println("esp8266/Arduino CI successfull!");
+  } else {
+    Serial.println("esp8266/Arduino CI has failed");
+  }
+  Serial.print("reply was : ");
+  Serial.println(line);
+  Serial.println("closing connection");
+  Serial.println("==========");
+  Serial.println();
+  //----------------------------------------
+}
+//====================================
+
 
 int readPin(const byte &p) {
   int r;
@@ -52,30 +191,65 @@ int readPin(const byte &p) {
 }
 
 void loop() {
-  
+  //termistor method for Temperature Calculation
   Vout = Vin * ((float)(readPin(16)) / 940.0);  // calculo de V0 e leitura de A0
-  Rout = (Rt * Vout / (Vin - Vout));               // calculo de Rout
-  TempKelvin = (beta / log(Rout / Rinf));          // calculo da temp. em Kelvins
-  TempCelsius = TempKelvin - 273.15;               // calculo da temp. em Celsius
-  Serial.print("Temperatura em Celsius: ");        // imprime no monitor serial
-  Serial.print(TempCelsius);                       // imprime temperatura Celsius
-  Serial.print(" Temperatura em Kelvin: ");        // imprime no monitor serial
-  Serial.println(TempKelvin);                      // imprime temperatura Kelvins
+  Rout = (Rt * Vout / (Vin - Vout));            // calculo de Rout
+  TempKelvin = (beta / log(Rout / Rinf));       // calculo da temp. em Kelvins
+  TempCelsius = TempKelvin - 273.15;            // calculo da temp. em Celsius
+  Serial.print("Temperatura em Celsius: ");     // imprime no monitor serial
+  Serial.print(TempCelsius);                    // imprime temperatura Celsius
+  Serial.print(" Temperatura em Kelvin: ");     // imprime no monitor serial
+  Serial.println(TempKelvin);                   // imprime temperatura Kelvins
   delay(500);
 
-  Serial.print("0,1023,");
-  Serial.print(readPin(16)); Serial.print(",");
-  Serial.print(readPin(5)); Serial.print(",");
-  Serial.println(readPin(14));
-  delay(500);
+  //SoilMoister Reading
+  soilUm = map(readPin(5), 0 , 860 , 100 , 0);
+  Serial.println();
+  Serial.print("Umidade do Solo em : ");
+  Serial.print(soilUm);
+  Serial.println("%");
 
-    delay(1000);
-  float h = DHT.readHumidity();
-  float t = DHT.readTemperature();
+  //DHT sensor data Reading
+  delay(1000);
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
   Serial.print("Humidade:");
-   Serial.print(h);
-Serial.print("%/t");
-     Serial.print("Temperatura:");
-      Serial.print(t);
-       Serial.print(" C°");
+  Serial.print(h);
+  Serial.print("% e ");
+  Serial.print("Temperatura em:");
+  Serial.print(t);
+  Serial.print(" C");
+
+  //Fotoresistor Reading
+  lumPC = map(readPin(14), 0 , 860 , 100 , 0);
+  Serial.println();
+  Serial.print("Luminosidade em : ");
+  Serial.print(lumPC);
+  Serial.println("%");
+
+  //Sending data to Google Sheet for recording
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Failed to read from DHT sensor !");
+    delay(500);
+    return;
+  }
+  if (isnan(lumPC) || isnan(soilUm)) {
+    Serial.println("Falha ao ler sensores Temp ou Luz");
+    delay(500);
+    return;
+  }
+
+
+  String Temp = "Temperature : " + String(t) + " °C";
+  String Humi = "Humidity : " + String(h) + " %";
+  String Lum = "Luminosidade: " + String(lumPC) + " %";
+  String Soilhum = "Humidade do Solo: " + String(soilUm) + " %";
+  String TempCel = "Temperatura Varistor: " + String(TempCelsius) + " %";
+
+
+  Serial.println(Temp);
+  Serial.println(Humi);
+
+  sendData(t, h, lumPC, soilUm, TempCelsius);  //--> Calls the sendData Subroutine
 }
