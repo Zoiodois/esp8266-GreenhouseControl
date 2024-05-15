@@ -1,3 +1,4 @@
+
 /*******************************************************
  * ESP8266 Adding Sensors and Google Sheet Records
  * 01/2024 - Felipe Buhrer
@@ -24,12 +25,13 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <DHT.h>
+#include <vector>
 
 
 //Wifi com 2 redes
 //const char *ssid[] = { "Zezinho", "jose" };
-const char *ssid[] = { "**" };
-const char *password = "**";
+const char *ssid[] = { "NHAZINHA (EVENTOS)_EXT", "Nhazinha", "Nhazinha Extendida" };
+const char *password = "014280639";
 const int numNetworks = sizeof(ssid) / sizeof(ssid[0]);
 
 //Temperatura Termistor
@@ -85,11 +87,11 @@ float soilCap1 = 0.0;
 float soilCap2 = 0.0;
 
 //Greenhous Activity on/off
-bool grenhouseON = 1;
+bool grenhouseON = 0;
 int limiarEstufa = 80;
 
 //Variables for cicle Delays and Irrigation system
-int tempoCiclo = 600000;      // 10 min
+int tempoCiclo = 6000;      // 10 min
 int tempoIrrigacao = 300000;  //5 min
 int limiteUmidade = 80;       //45%
 
@@ -101,11 +103,11 @@ float leitura;
 
 
 //GSheets
-#define PROJECT_ID "**"
+#define PROJECT_ID "estufas-414918"
 // Service Account's client email
-#define CLIENT_EMAIL "**"
+#define CLIENT_EMAIL "valvulasestufas@estufas-414918.iam.gserviceaccount.com"
 // Service Account's private key
-const char PRIVATE_KEY[] PROGMEM = "**";
+const char PRIVATE_KEY[] PROGMEM = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDD04BqR9aTLWZ3\njNivjojqrHLVypjXFjiP1JIbyLotl4gP+HG0psoKufNmf78KuFidpeyY+DyLle5z\n0QI7+RHjXK/c4xTGdlhXCYlxhIGPtV9HGIuqGiO3BlRo35+EuG29EmlUXu71uCEb\nheLqz+ZjFFJfiCqdgEK7bp/id3SJmAJj3kqLjO8CRKDP4/XhBYMYfn+2doIv6CqG\nnaFrdOByGAAEy7QhJ/N+qRpXpN9vX95wEvK3aO4mwKQbxU7SMbhx7tV0n9B2/2mz\nwNmZSYFNOSieiCok7r2x9ovrACiE0YtgNgDi7VJsb3Xql6cDEwSFLHJzYSUypOpT\naE8sG4snAgMBAAECggEAB82gQtvs+X1oJWBn7Ar2er93bfx+Paflhhm23sOPY6yz\nn8tLIKM6ztWdFNsHTlKNOW74sBnIM9m8IEJWX/RrWY+CdH9Z/xSNLZ60KuFYVlUo\nYElim1siTDNE3s72aM/+k3et2c5UoFb/frzFj4zMRetz4tmmtRL81cIxPdF7w9XI\nahLrhq7oIcFAF2k87/TlIeUZjnPg+CufasbJ8MrHc0HGfImPXoGRzC36BBj2DAi0\n2l5M6koOr1l9eXAiG2lB4W/NYahPJw7c2PCJLphBHxdlkzNNqvFG+8otPa0DtTGu\nfH0D8Zx8jDEeRiLzm9j034DzRo6yHST9karNPisY7QKBgQD2GYRHNychAK/zH+1p\nwFoNM4nykMTDQtd8lce5x6Nnwzm/3E/1LuFcGQoiHnICjeSQmRb0f6K9p3XI8kD3\nGhhzNhAlp+3PY3HQL9tKgGsIyomBmUGdMu36WlQA72Y1aDtoDz0ehgjOs2O7pGej\n5UNvOaVECgor21a3BHGctv4oRQKBgQDLtDzwGyfrDjzo1Naa6SdC16ZUbtRbeMuD\nHMfqIbavn8x705Ysb+eSkbTooTVlunESO0B8nbnXJ2Snm0SSMD7JW0UYQJg90VVw\nXOSdpDjU0aVX2n+RFmByEhGB7f/ccl8s9JSoRNVnFMihf0RHqF3yeXix3cAwsYes\nQm3CyDWKewKBgQC1sCD4cr9wnhFIbUnZySiyllpBup+JiM+OKwZJIhqBgKAiBYUC\nfpniZJoWlmOVfyw/lMZdu91qJzfOIwvTYnCqnj9Nja0Eb2aXTL2ZQzXCR8U86OiI\nJhGLwyRBjHzo8QrqyFVXM51M/SOkZLwfRCOE+goJMWBRAJ4EgENgb7k0AQKBgAfC\n4UOAtV+mVjnEyjxyv7UzRDoZUuv9STvAn/lSuYQtgXwCTsl4pgkWlh767W7n0KES\nMt3MoKUK8jHUn6M2RV4kpRhMdcB9NlUmpOtAs42gQz16rLuZb6lI+PPLXqFGlku/\nMd7LaJoZ158Xm0Fjr9iqOigEu+rfCL1OdqIiQK/7AoGAN1B8A/SnY6LUNSEFyrur\nzuucXBMhfG6WBCs4tY2P35adfAlPg5TBUlyZc4zso7NR2xjxjb+EnqgrI4SsHiOT\n4YSNAfxRhugVm/w7z35/jFXQDTX6TNQ4TNCItvQe8itjpEXz1tVyutLUnRgAOTYL\nBVLlGGamAEIkO9/FPGA6A88=\n-----END PRIVATE KEY-----\n";
 unsigned long ms = 0;
 unsigned long mr = 0;
 void tokenStatusCallback(TokenInfo info);
@@ -341,7 +343,49 @@ void selectChannel(int channel) {
   digitalWrite(MUXB, bitRead(channel, 1));
   digitalWrite(MUXC, bitRead(channel, 2));
 }
+//Change place after finish ->>>
 
+#include <String>
+#include <ctime>
+
+// Definição da struct para armazenar os diferentes tipos de dados
+struct Dados {
+  time_t epochTime;
+  String currentDate;
+  String formattedTime;
+  float temperatureModulo;
+  float humidityModulo;
+  float TempCelsius;
+  float soilUmUm;
+  float lumPC;
+  float soilCap1;
+  float soilCap2;
+  float temperatureEstufa;
+  float humidityEstufa;
+};
+// Vetor para armazenar os conjuntos de dados
+std::vector<Dados> dadosArmazenados;
+
+//Method for saving values in RAM
+void saveValues() {
+  
+  Dados dadosEstruturados;
+  dadosEstruturados.epochTime = epochTime;
+  dadosEstruturados.currentDate = currentDate;
+  dadosEstruturados.formattedTime = formattedTime;
+  dadosEstruturados.temperatureModulo = temperatureModulo;
+  dadosEstruturados.humidityModulo = humidityModulo;
+  dadosEstruturados.TempCelsius = TempCelsius;
+  dadosEstruturados.soilUmUm = soilUmUm;
+  dadosEstruturados.lumPC = lumPC;
+  dadosEstruturados.soilCap1 = soilCap1;
+  dadosEstruturados.soilCap2 = soilCap2 ;
+  dadosEstruturados.temperatureEstufa = temperatureEstufa;
+  dadosEstruturados.humidityEstufa = temperatureEstufa;
+   
+  // Adicione o conjunto de dados ao vetor dadosArmazenados
+  dadosArmazenados.push_back(dadosEstruturados);
+}
 
 //--------------Setup
 void setup() {
@@ -500,11 +544,14 @@ void loop() {
     debug("Formatted Time: ");
     debugln(formattedTime);
 
+    bool conectionError = true;
+
     for (int i = 0; i < 3; i++) {
       if (GSheet.ready()) {
         // Se a conexão estiver pronta, execute as funções relacionadas ao Google Sheets
         loop_enviadorDados();
         loop_receberDados();
+        conectionError = false;
         break;  // Sai do loop de tentativas se a conexão estiver pronta
       } else {
         // Set the callback for Google API access token generation status (for debug only)
@@ -515,19 +562,27 @@ void loop() {
         GSheet.begin(CLIENT_EMAIL, PROJECT_ID, PRIVATE_KEY);
         delay(5000);  // Aguarda um curto período antes de tentar novamente
 
-        loop_enviadorDados();
-
-        loop_receberDados();
       }
     }
-  } else {
+
+    if (conectionError) {
+      saveValues();
+    }
+  }
+  
+   else {
     debugln("Disconnected from Wi-Fi. Reconnecting...");
 
     WiFi.disconnect();
     delay(500);
 
     connectWiFi();
+
+    saveValues();
+
   }
+
+  saveValues();
 
 
   //Greenhouse Relay On/Off Logic
@@ -551,7 +606,7 @@ void loop() {
     //check to only runs 1 valve at a time, prevent power supply ishues
     if (humidityEstufa < limiarEstufa) {
       digitalWrite(sprayPin, HIGH);
-      delay(2000)
+      delay(1000);
     }
 
     debugln("Relé Irrigação Acionado");
@@ -569,4 +624,20 @@ void loop() {
   debugln("Cicle Delay: ");
   debug(tempoCiclo);
   delay(tempoCiclo);
+
+  for (const auto& dados : dadosArmazenados) {
+    Serial.println("Epoch Time: " + String(dados.epochTime));
+    Serial.println("Current Date: " + dados.currentDate);
+    Serial.println("Formatted Time: " + dados.formattedTime);
+    Serial.println("Temperature Modulo: " + String(dados.temperatureModulo));
+    Serial.println("Humidity Modulo: " + String(dados.humidityModulo));
+    Serial.println("Temp Celsius: " + String(dados.TempCelsius));
+    Serial.println("Soil UmUm: " + String(dados.soilUmUm));
+    Serial.println("Lum PC: " + String(dados.lumPC));
+    Serial.println("Soil Cap1: " + String(dados.soilCap1));
+    Serial.println("Soil Cap2: " + String(dados.soilCap2));
+    Serial.println("Temperature Estufa: " + String(dados.temperatureEstufa));
+    Serial.println("Humidity Estufa: " + String(dados.humidityEstufa));
+  }
+
 }
