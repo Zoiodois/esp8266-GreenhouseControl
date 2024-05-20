@@ -34,15 +34,10 @@ unsigned long ms = 0;
 unsigned long mr = 0;
 void tokenStatusCallback(TokenInfo info);
 
-#include <Arduino.h> //Overall librarie for commun methods
-#include <ESP8266WiFi.h> //Wifi conection for esp8266
-#include <ESP_Google_Sheet_Client.h> //Send data to Google Sheets
-#include <NTPClient.h> //Get the EPOCH time from web
-#include <WiFiUdp.h> // Get the EPOCH time from web
-#include <DHT.h> //Read DHT Sensors
-#include <vector> //Save Ram Data
-#include <String> //Save Ram Data
-#include <ctime> //Save Ram Data
+
+//Variables for testing on Google Sheets
+String sheetAppend = "Teste!"; //Dados
+String sheetValues = "TemposTeste!";  // Config
 
 //Temperatura Termistor
 #define Vin 3.25          // define constante igual a 5.0
@@ -274,7 +269,7 @@ void loop_enviadorDados() {
     valueRange.set("values/[0]/[11]", humidityEstufa);
 
 
-    bool success = GSheet.values.append(&response /* returned response */, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o" /* spreadsheet Id to append */, "Teste!A2" /* range to append */, &valueRange /* data range to append */);
+    bool success = GSheet.values.append(&response /* returned response */, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o" /* spreadsheet Id to append */, sheetAppend + "A2" /* range to append */, &valueRange /* data range to append */);
     if (success) {
       response.toString(Serial, true);
 
@@ -312,7 +307,7 @@ void loop_receberDados() {
     debugln("Get spreadsheet values from range...");
     debugln("---------------------------------------------------------------");
 
-    bool success = GSheet.values.get(&response2, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o", "Config!A2:E2");
+    bool success = GSheet.values.get(&response2, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o", sheetValues + "A2:E2");
 
     response2.get(result /* FirebaseJsonData */, "values/[0]/[0]" /* key or path */);
 
@@ -380,7 +375,7 @@ std::vector<Dados> dadosArmazenados;
 
 //Method for saving values in RAM
 void saveValues() {
-  debugln("Savind Data on Ram");
+  debugln("Saving Data on Ram");
 
     Dados dadosEstruturados;
   dadosEstruturados.epochTime = epochTime;
@@ -467,7 +462,7 @@ void sendRamData() {
       valueRange.set("values/[0]/[11]", dados.humidityEstufa);
 
 
-      bool success = GSheet.values.append(&response /* returned response */, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o" /* spreadsheet Id to append */, "Teste!A2" /* range to append */, &valueRange /* data range to append */);
+      bool success = GSheet.values.append(&response /* returned response */, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o" /* spreadsheet Id to append */, sheetAppend + "A2" /* range to append */, &valueRange /* data range to append */);
       if (success) {
 
         response.toString(Serial, true);
