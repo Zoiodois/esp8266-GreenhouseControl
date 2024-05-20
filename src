@@ -242,7 +242,7 @@ void loop_enviadorDados() {
 
     FirebaseJson response;
 
-    debugln("\nAppend spreadsheet values...");
+    debugln("\nAppend spreadsheet values From READINGS...");
     debugln("----------------------------");
 
     FirebaseJson valueRange;
@@ -274,7 +274,7 @@ void loop_enviadorDados() {
     valueRange.set("values/[0]/[11]", humidityEstufa);
 
 
-    bool success = GSheet.values.append(&response /* returned response */, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o" /* spreadsheet Id to append */, "Dados!A2" /* range to append */, &valueRange /* data range to append */);
+    bool success = GSheet.values.append(&response /* returned response */, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o" /* spreadsheet Id to append */, "Teste!A2" /* range to append */, &valueRange /* data range to append */);
     if (success) {
       response.toString(Serial, true);
 
@@ -420,8 +420,7 @@ void showDatainRAM() {
 }
 
 void sendRamData() {
-  Serial.println("Iniciando Iterar DADOSSS --***");
-  // Variável para armazenar o índice do início de um novo conjunto de dados
+   // Variável para armazenar o índice do início de um novo conjunto de dados
   int startIdx = 0;
   unsigned long lastAppendTime = 0;
   const unsigned long appendInterval = 5000;
@@ -481,7 +480,7 @@ void sendRamData() {
       }
       debugln(ESP.getFreeHeap());
 
-      delay(15000);
+      delay(15000); //Change this delay for a milis() method
     } else {
       debugln("GSheet not ready or waiting for next interval");
     }
