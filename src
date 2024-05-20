@@ -277,15 +277,19 @@ void loop_enviadorDados() {
 
     bool success = GSheet.values.append(&response /* returned response */, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o" /* spreadsheet Id to append */, "Dados!A2" /* range to append */, &valueRange /* data range to append */);
     if (success) {
-
       response.toString(Serial, true);
+
     } else {
 
       debugln(GSheet.errorReason());
       debugln();
+      saveValues(); //Saving Values in RAM
+
     }
     debugln(ESP.getFreeHeap());
   } else {
+
+    saveValues(); //Saving Values in RAM
     return;
   }
 }
@@ -466,6 +470,38 @@ void iterateData() {
   }
 }
 
+void epochCalculate(time_t epochTime){
+   
+   //Inserir data e hora
+    debug("Epoch Time: ");
+    debugln(epochTime);
+
+    //Get a time structure
+    struct tm *ptm = gmtime((time_t *)&epochTime);
+
+    monthDay = ptm->tm_mday;
+    debug("Month day: ");
+    debugln(monthDay);
+
+    currentMonth = ptm->tm_mon + 1;
+    debug("Month: ");
+    debugln(currentMonth);
+
+    currentYear = ptm->tm_year + 1900;
+    debug("Year: ");
+    debugln(currentYear);
+
+    //Print complete date:
+    currentDate = String(currentMonth) + "-" + String(monthDay) + "-" + String(currentYear);
+    debug("Current date: ");
+    debugln(currentDate);
+
+    formattedTime = timeClient.getFormattedTime();
+    debug("Formatted Time: ");
+    debugln(formattedTime);
+
+}
+
 
 //--------------Setup
 void setup() {
@@ -594,43 +630,18 @@ void loop() {
   // Verifica se a conexão com a Internet está ativa a cada intervalo de tempo
   if (WiFi.status() == WL_CONNECTED) {
 
-    //Inserir data e hora
+
     timeClient.update();
     epochTime = timeClient.getEpochTime();
-    debug("Epoch Time: ");
-    debugln(epochTime);
-
-    //Get a time structure
-    struct tm *ptm = gmtime((time_t *)&epochTime);
-
-    monthDay = ptm->tm_mday;
-    debug("Month day: ");
-    debugln(monthDay);
-
-    currentMonth = ptm->tm_mon + 1;
-    debug("Month: ");
-    debugln(currentMonth);
-
-    currentYear = ptm->tm_year + 1900;
-    debug("Year: ");
-    debugln(currentYear);
-
-    //Print complete date:
-    currentDate = String(currentMonth) + "-" + String(monthDay) + "-" + String(currentYear);
-    debug("Current date: ");
-    debugln(currentDate);
-
-    formattedTime = timeClient.getFormattedTime();
-    debug("Formatted Time: ");
-    debugln(formattedTime);
-
+    epochCalculate(epochTime);
+   
     bool conectionError = true;
 
     for (int i = 0; i < 3; i++) {
       if (GSheet.ready()) {
         // Se a conexão estiver pronta, execute as funções relacionadas ao Google Sheets
-        //loop_enviadorDados();
-        //loop_receberDados();
+        loop_enviadorDados();
+        loop_receberDados();
         conectionError = false;
         break;  // Sai do loop de tentativas se a conexão estiver pronta
       } else {
@@ -645,7 +656,7 @@ void loop() {
     }
 
     if (conectionError) {
-      //saveValues();
+      saveValues();
     }
   }
 
@@ -657,11 +668,13 @@ void loop() {
 
     connectWiFi();
 
-    //saveValues();
+    epochTime = epochTime + (tempoCiclo/1000);
+
+    saveValues();
+
   }
 
-  saveValues();
-
+ 
 
   //Greenhouse Relay On/Off Logic
   if (grenhouseON == 1) {
