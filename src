@@ -18,6 +18,16 @@
 #define debugln(x)
 #endif
 
+#include <Arduino.h>                  //Overall librarie for commun methods
+#include <ESP8266WiFi.h>              //Wifi conection for esp8266
+#include <ESP_Google_Sheet_Client.h>  //Send data to Google Sheets
+#include <NTPClient.h>                //Get the EPOCH time from web
+#include <WiFiUdp.h>                  // Get the EPOCH time from web
+#include <DHT.h>                      //Read DHT Sensors
+#include <vector>                     //Save Ram Data
+#include <String>                     //Save Ram Data
+#include <ctime>                      //Save Ram Data
+
 //Wifi com 2 redes
 //const char *ssid[] = { "Zezinho", "jose" };
 const char *ssid[] = { "**" };
