@@ -44,7 +44,6 @@ void tokenStatusCallback(TokenInfo info);
 #include <String> //Save Ram Data
 #include <ctime> //Save Ram Data
 
-
 //Temperatura Termistor
 #define Vin 3.25          // define constante igual a 5.0
 #define T0 298.15         // define constante igual a 298.15 Kelvin
@@ -206,12 +205,12 @@ void Load_DHT11_Data() {
       delay(100);  // Pequena espera entre as tentativas
     }
   }
-   if (!leituraBemSucedida) {
+  if (!leituraBemSucedida) {
     debugln("Failed to read from DHT Estufa sensor after multiple attempts!");
     temperatureEstufa = 0.0;
     humidityEstufa = 0.0;
   }
-  
+
   //-----------------------------------------------------------
   Serial.printf("Temperature Estufa: %f °C\n", temperatureEstufa);
   Serial.printf("Humidity Estufa: %f %%\n", humidityEstufa);
@@ -283,13 +282,12 @@ void loop_enviadorDados() {
 
       debugln(GSheet.errorReason());
       debugln();
-      saveValues(); //Saving Values in RAM
-
+      saveValues();  //Saving Values in RAM
     }
     debugln(ESP.getFreeHeap());
   } else {
 
-    saveValues(); //Saving Values in RAM
+    saveValues();  //Saving Values in RAM
     return;
   }
 }
@@ -382,8 +380,9 @@ std::vector<Dados> dadosArmazenados;
 
 //Method for saving values in RAM
 void saveValues() {
+  debugln("Savind Data on Ram");
 
-  Dados dadosEstruturados;
+    Dados dadosEstruturados;
   dadosEstruturados.epochTime = epochTime;
   dadosEstruturados.currentDate = currentDate;
   dadosEstruturados.formattedTime = formattedTime;
@@ -401,7 +400,26 @@ void saveValues() {
   dadosArmazenados.push_back(dadosEstruturados);
 }
 
-void iterateData() {
+void showDatainRAM() {
+  Serial.println("Show data in RAM***");
+  for (size_t i = 0; i < dadosArmazenados.size(); ++i) {
+    const auto &dados = dadosArmazenados[i];
+    Serial.println("Epoch Time: " + String(dados.epochTime));
+    Serial.println("Current Date: " + dados.currentDate);
+    Serial.println("Formatted Time: " + dados.formattedTime);
+    Serial.println("Temperature Modulo: " + String(dados.temperatureModulo));
+    Serial.println("Humidity Modulo: " + String(dados.humidityModulo));
+    Serial.println("Temp Celsius: " + String(dados.TempCelsius));
+    Serial.println("Soil UmUm: " + String(dados.soilUmUm));
+    Serial.println("Lum PC: " + String(dados.lumPC));
+    Serial.println("Soil Cap1: " + String(dados.soilCap1));
+    Serial.println("Soil Cap2: " + String(dados.soilCap2));
+    Serial.println("Temperature Estufa: " + String(dados.temperatureEstufa));
+    Serial.println("Humidity Estufa: " + String(dados.humidityEstufa));
+  }
+}
+
+void sendRamData() {
   Serial.println("Iniciando Iterar DADOSSS --***");
   // Variável para armazenar o índice do início de um novo conjunto de dados
   int startIdx = 0;
@@ -415,7 +433,6 @@ void iterateData() {
     //Coping the sending data method in here
     bool ready = GSheet.ready();
     if (ready) {
-     
 
       FirebaseJson response;
       FirebaseJson valueRange;
@@ -455,6 +472,8 @@ void iterateData() {
       if (success) {
 
         response.toString(Serial, true);
+        dadosArmazenados.erase(dadosArmazenados.begin() + i);
+
       } else {
 
         debugln(GSheet.errorReason());
@@ -465,41 +484,39 @@ void iterateData() {
       delay(15000);
     } else {
       debugln("GSheet not ready or waiting for next interval");
-
     }
   }
 }
 
-void epochCalculate(time_t epochTime){
-   
-   //Inserir data e hora
-    debug("Epoch Time: ");
-    debugln(epochTime);
+void epochCalculate(time_t epochTime) {
 
-    //Get a time structure
-    struct tm *ptm = gmtime((time_t *)&epochTime);
+  //Inserir data e hora
+  debug("Epoch Time: ");
+  debugln(epochTime);
 
-    monthDay = ptm->tm_mday;
-    debug("Month day: ");
-    debugln(monthDay);
+  //Get a time structure
+  struct tm *ptm = gmtime((time_t *)&epochTime);
 
-    currentMonth = ptm->tm_mon + 1;
-    debug("Month: ");
-    debugln(currentMonth);
+  monthDay = ptm->tm_mday;
+  debug("Month day: ");
+  debugln(monthDay);
 
-    currentYear = ptm->tm_year + 1900;
-    debug("Year: ");
-    debugln(currentYear);
+  currentMonth = ptm->tm_mon + 1;
+  debug("Month: ");
+  debugln(currentMonth);
 
-    //Print complete date:
-    currentDate = String(currentMonth) + "-" + String(monthDay) + "-" + String(currentYear);
-    debug("Current date: ");
-    debugln(currentDate);
+  currentYear = ptm->tm_year + 1900;
+  debug("Year: ");
+  debugln(currentYear);
 
-    formattedTime = timeClient.getFormattedTime();
-    debug("Formatted Time: ");
-    debugln(formattedTime);
+  //Print complete date:
+  currentDate = String(currentMonth) + "-" + String(monthDay) + "-" + String(currentYear);
+  debug("Current date: ");
+  debugln(currentDate);
 
+  formattedTime = timeClient.getFormattedTime();
+  debug("Formatted Time: ");
+  debugln(formattedTime);
 }
 
 
@@ -634,7 +651,7 @@ void loop() {
     timeClient.update();
     epochTime = timeClient.getEpochTime();
     epochCalculate(epochTime);
-   
+
     bool conectionError = true;
 
     for (int i = 0; i < 3; i++) {
@@ -668,13 +685,11 @@ void loop() {
 
     connectWiFi();
 
-    epochTime = epochTime + (tempoCiclo/1000);
+    epochTime = epochTime + (tempoCiclo / 1000);
+    epochCalculate(epochTime);
 
     saveValues();
-
   }
-
- 
 
   //Greenhouse Relay On/Off Logic
   if (grenhouseON == 1) {
@@ -711,32 +726,15 @@ void loop() {
     }
   }
 
-  iterateData();
+  if (!dadosArmazenados.empty() && WiFi.status() == WL_CONNECTED) {
+    // Enviar os dados armazenados
+    sendRamData();
+  }
+
+
+  showDatainRAM();
 
   debugln("Cicle Delay: ");
   debug(tempoCiclo);
   delay(tempoCiclo);
-
-  /*
-   for (size_t i = 0; i < dadosArmazenados.size(); ++i) {
-    const auto& dados = dadosArmazenados[i];
-    Serial.println("Epoch Time: " + String(dados.epochTime));
-    Serial.println("Current Date: " + dados.currentDate);
-    Serial.println("Formatted Time: " + dados.formattedTime);
-    Serial.println("Temperature Modulo: " + String(dados.temperatureModulo));
-    Serial.println("Humidity Modulo: " + String(dados.humidityModulo));
-    Serial.println("Temp Celsius: " + String(dados.TempCelsius));
-    Serial.println("Soil UmUm: " + String(dados.soilUmUm));
-    Serial.println("Lum PC: " + String(dados.lumPC));
-    Serial.println("Soil Cap1: " + String(dados.soilCap1));
-    Serial.println("Soil Cap2: " + String(dados.soilCap2));
-    Serial.println("Temperature Estufa: " + String(dados.temperatureEstufa));
-    Serial.println("Humidity Estufa: " + String(dados.humidityEstufa));
-    
-    // Adicione uma linha em branco entre os conjuntos de dados, exceto para o último
-    if (i < dadosArmazenados.size() - 1) {
-      Serial.println();
-    }
-  }
-  */
 }
