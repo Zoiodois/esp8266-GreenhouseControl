@@ -1,6 +1,6 @@
 //Wifi com 2 redes
 //const char *ssid[] = { "SSID1", "SSID2" };
-const char *ssid[] = { "Test" };
+const char *ssid[] = { "**" };
 const char *password = "**";
 const int numNetworks = sizeof(ssid) / sizeof(ssid[0]);
 
