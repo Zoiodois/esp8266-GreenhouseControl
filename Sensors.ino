@@ -70,7 +70,7 @@ void selectChannel(int channel) {
 
 //Calculate Epoch Time Dependet Variables
 void epochCalculate(time_t epochTime) {
-  //Hey delete me
+
   //Inserir data e hora
   debug("Epoch Time: ");
   debugln(epochTime);
