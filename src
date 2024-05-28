@@ -1,6 +1,6 @@
 
 /*******************************************************
- * ESP8266 Saving Values in Ram case internet offline
+ * ESP8266 Saving Values in Ram case internet offline / Code Upgrade
  * 05/2024 - Felipe Buhrer
  */
 /********************************************************
@@ -28,22 +28,10 @@
 #include <String>                     //Save Ram Data
 #include <ctime>                      //Save Ram Data
 
-//Wifi com 2 redes
-//const char *ssid[] = { "Zezinho", "jose" };
-const char *ssid[] = { "**" };
-const char *password = "**";
-const int numNetworks = sizeof(ssid) / sizeof(ssid[0]);
-
-//GSheets
-#define PROJECT_ID "**"
-// Service Account's client email
-#define CLIENT_EMAIL "**"
-// Service Account's private key
-const char PRIVATE_KEY[] PROGMEM = "**";
+#include "envKeys.h"
 unsigned long ms = 0;
 unsigned long mr = 0;
 void tokenStatusCallback(TokenInfo info);
-
 
 //Variables for testing on Google Sheets
 String sheetAppend = "Teste!"; //Dados
@@ -134,395 +122,35 @@ String formattedTime;
 
 //--------------------------Methods
 //Connect Wifi
-void connectWiFi() {
-  debugln("Tentando conectar ao WiFi...");
+void connectWiFi();
 
-  for (int i = 0; i < numNetworks; i++) {
-    WiFi.mode(WIFI_OFF);
-    delay(1000);
-    //This line hides the viewing of ESP as wifi hotspot
-    WiFi.mode(WIFI_STA);
-
-    WiFi.begin(ssid[i], password);  // Tentativa de conexão com a rede atual
-
-    unsigned long startTime = millis();  // Tempo inicial de tentativa de conexão
-
-    while (WiFi.status() != WL_CONNECTED && millis() - startTime < 60000) {
-      delay(500);
-      debug(".");
-    }
-
-    if (WiFi.status() == WL_CONNECTED) {
-      debugln("\nConectado ao WiFi!");
-      return;  // Se a conexão for bem-sucedida, interrompa o loop e retorne
-    } else {
-      debugln("\nFalha ao conectar ao WiFi!");
-      WiFi.disconnect();  // Desconecta do WiFi atual antes de tentar o próximo
-    }
-  }
-
-  debugln("Todas as tentativas de conexão falharam.");
-}
-
-//Gsheets --
-void tokenStatusCallback(TokenInfo info) {
-  if (info.status == token_status_error) {
-    GSheet.printf("Token info: type = %s, status = %s\n", GSheet.getTokenType(info).c_str(), GSheet.getTokenStatus(info).c_str());
-    GSheet.printf("Token error: %s\n", GSheet.getTokenError(info).c_str());
-  } else {
-    GSheet.printf("Token info: type = %s, status = %s\n", GSheet.getTokenType(info).c_str(), GSheet.getTokenStatus(info).c_str());
-  }
-}
-
+//**Sensors
 //dht11
-void Load_DHT11_Data() {
-
-  //Leitura Modulo
-  //-----------------------------------------------------------
-  temperatureModulo = dhtModulo.readTemperature();  //Celsius
-  humidityModulo = dhtModulo.readHumidity();
-  //-----------------------------------------------------------
-  // Check if any reads failed.
-  if (isnan(temperatureModulo) || isnan(humidityModulo)) {
-    debugln("Failed to read from DHT Modulo sensor!");
-    temperatureModulo = 0.0;
-    humidityModulo = 0.0;
-  }
-  //-----------------------------------------------------------
-  Serial.printf("Temperature Outside: %f °C\n", temperatureModulo);
-  Serial.printf("Humidity Outside: %f %%\n", humidityModulo);
-
-  //Greenhouse Readings
-  //-----------------------------------------------------------
-  const int maxTentativas = 10;
-  int tentativas = 0;
-  bool leituraBemSucedida = false;
-
-
-  while (tentativas < maxTentativas && !leituraBemSucedida) {
-    temperatureEstufa = dhtEstufa.readTemperature();  // Celsius
-    humidityEstufa = dhtEstufa.readHumidity();
-
-    if (!isnan(temperatureEstufa) && !isnan(humidityEstufa)) {
-      leituraBemSucedida = true;
-    } else {
-      tentativas++;
-      delay(100);  // Pequena espera entre as tentativas
-    }
-  }
-  if (!leituraBemSucedida) {
-    debugln("Failed to read from DHT Estufa sensor after multiple attempts!");
-    temperatureEstufa = 0.0;
-    humidityEstufa = 0.0;
-  }
-
-  //-----------------------------------------------------------
-  Serial.printf("Temperature Estufa: %f °C\n", temperatureEstufa);
-  Serial.printf("Humidity Estufa: %f %%\n", humidityEstufa);
-}
-
-
+void Load_DHT11_Data();
 //Leitura Sensores Resistivos
-int readPin() {
-
-  media = 0;
-  somatoria = 0;
-  analogRead(A0);
-  for (int i = 1; i <= NUMERO_AMOSTRAS; i++) {
-    int r;
-    r = analogRead(A0);
-    somatoria = somatoria + r;
-  }
-  media = somatoria / NUMERO_AMOSTRAS;
-  delay(1000);
-  return media;
-}
-
-//Enviador de Dados
-void loop_enviadorDados() {
-
-  bool ready = GSheet.ready();
-  if (ready && millis() - ms > 15000) {
-    ms = millis();
-
-    FirebaseJson response;
-
-    debugln("\nAppend spreadsheet values From READINGS...");
-    debugln("----------------------------");
-
-    FirebaseJson valueRange;
-    //Dados em linha
-    valueRange.add("majorDimension", "ROWS");
-    //rawdate
-    valueRange.set("values/[0]/[0]", epochTime);
-    //data
-    valueRange.set("values/[0]/[1]", currentDate);
-    //hora
-    valueRange.set("values/[0]/[2]", formattedTime);
-    //Temperatura Externa
-    valueRange.set("values/[0]/[3]", temperatureModulo);
-    //Umidade do AR Externo
-    valueRange.set("values/[0]/[4]", humidityModulo);
-    //Temperatura Termistor
-    valueRange.set("values/[0]/[5]", TempCelsius);
-    //Umidade Solo 1 Resistivo Externo Mudas
-    valueRange.set("values/[0]/[6]", soilUmUm);
-    //Luminosidade
-    valueRange.set("values/[0]/[7]", lumPC);
-    //Umidade Solo Capacitivo 1 - Provavelmente Estufas
-    valueRange.set("values/[0]/[8]", soilCap1);
-    //Umidade Solo Capacitivo 2
-    valueRange.set("values/[0]/[9]", soilCap2);
-    //Temperatura Estufa
-    valueRange.set("values/[0]/[10]", temperatureEstufa);
-    //Umidade do AR Estufa
-    valueRange.set("values/[0]/[11]", humidityEstufa);
-
-
-    bool success = GSheet.values.append(&response /* returned response */, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o" /* spreadsheet Id to append */, sheetAppend + "A2" /* range to append */, &valueRange /* data range to append */);
-    if (success) {
-      response.toString(Serial, true);
-
-    } else {
-
-      debugln(GSheet.errorReason());
-      debugln();
-      saveValues();  //Saving Values in RAM
-    }
-    debugln(ESP.getFreeHeap());
-  } else {
-
-    saveValues();  //Saving Values in RAM
-    return;
-  }
-}
-
-//Recebedor de Dados
-void loop_receberDados() {
-  bool ready = GSheet.ready();
-  debugln("Receber Dados Iniciando");
-
-  if (ready && millis() - mr > 15000) {
-    mr = millis();
-    debugln("--Gsheet Ready--");
-
-    FirebaseJson response2;
-    FirebaseJsonData result;   //Tempo Ciclo
-    FirebaseJsonData result2;  //Limiar Estufa
-    FirebaseJsonData result3;  //Estufa Ligada
-    FirebaseJsonData result4;  //Tempo Irrigacao
-    FirebaseJsonData result5;  //Valor Limite Irrigação
-
-
-    debugln("Get spreadsheet values from range...");
-    debugln("---------------------------------------------------------------");
-
-    bool success = GSheet.values.get(&response2, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o", sheetValues + "A2:E2");
-
-    response2.get(result /* FirebaseJsonData */, "values/[0]/[0]" /* key or path */);
-
-    response2.get(result2 /* FirebaseJsonData */, "values/[0]/[1]" /* key or path */);
-
-    response2.get(result3 /* FirebaseJsonData */, "values/[0]/[2]" /* key or path */);
-
-    response2.get(result4 /* FirebaseJsonData */, "values/[0]/[3]" /* key or path */);
-
-    response2.get(result5 /* FirebaseJsonData */, "values/[0]/[4]" /* key or path */);
-
-    response2.toString(Serial, true);
-
-    debugln("Delay betwen Cicles:");
-    tempoCiclo = result.to<int>();
-    debugln(tempoCiclo);
-
-    debugln("Greenhouse Humidity Treshold Limit");
-    limiarEstufa = result2.to<int>();
-    debugln(limiarEstufa);
-
-    debugln("Grenhouse on/off Status:");
-    grenhouseON = result3.to<int>();
-    debugln(grenhouseON);
-
-    debugln("New Irrigation Time:");
-    tempoIrrigacao = result4.to<int>();
-    debugln(tempoIrrigacao);
-
-    debugln("Soil Humidity Treshold Limit");
-    limiteUmidade = result5.to<int>();
-    debugln(limiteUmidade);
-
-  } else {
-
-    return;
-  }
-}
+int readPin();
 //Mux port selection code
-void selectChannel(int channel) {
-  digitalWrite(MUXA, bitRead(channel, 0));
-  digitalWrite(MUXB, bitRead(channel, 1));
-  digitalWrite(MUXC, bitRead(channel, 2));
-}
+void selectChannel();
+//Calculate Epoch Dependent Variables
+void epochCalculate();
 
-//Saving data to RAM
+//**Gsheets --
+void tokenStatusCallback();
+//Enviador de Dados
+void loop_enviadorDados();
+//Recebedor de Dados
+void loop_receberDados();
+
+
+//**Saving data to RAM
 // Struct definition to save all data formats
-struct Dados {
-  time_t epochTime;
-  String currentDate;
-  String formattedTime;
-  float temperatureModulo;
-  float humidityModulo;
-  float TempCelsius;
-  float soilUmUm;
-  float lumPC;
-  float soilCap1;
-  float soilCap2;
-  float temperatureEstufa;
-  float humidityEstufa;
-};
-
+struct Dados;
 // Vector para armazenar os conjuntos de dados
 std::vector<Dados> dadosArmazenados;
-
 //Method for saving values in RAM
-void saveValues() {
-  debugln("Saving Data on Ram");
-
-    Dados dadosEstruturados;
-  dadosEstruturados.epochTime = epochTime;
-  dadosEstruturados.currentDate = currentDate;
-  dadosEstruturados.formattedTime = formattedTime;
-  dadosEstruturados.temperatureModulo = temperatureModulo;
-  dadosEstruturados.humidityModulo = humidityModulo;
-  dadosEstruturados.TempCelsius = TempCelsius;
-  dadosEstruturados.soilUmUm = soilUmUm;
-  dadosEstruturados.lumPC = lumPC;
-  dadosEstruturados.soilCap1 = soilCap1;
-  dadosEstruturados.soilCap2 = soilCap2;
-  dadosEstruturados.temperatureEstufa = temperatureEstufa;
-  dadosEstruturados.humidityEstufa = humidityEstufa;
-
-  // Adicione o conjunto de dados ao vetor dadosArmazenados
-  dadosArmazenados.push_back(dadosEstruturados);
-}
-
-void showDatainRAM() {
-  Serial.println("Show data in RAM***");
-  for (size_t i = 0; i < dadosArmazenados.size(); ++i) {
-    const auto &dados = dadosArmazenados[i];
-    Serial.println("Epoch Time: " + String(dados.epochTime));
-    Serial.println("Current Date: " + dados.currentDate);
-    Serial.println("Formatted Time: " + dados.formattedTime);
-    Serial.println("Temperature Modulo: " + String(dados.temperatureModulo));
-    Serial.println("Humidity Modulo: " + String(dados.humidityModulo));
-    Serial.println("Temp Celsius: " + String(dados.TempCelsius));
-    Serial.println("Soil UmUm: " + String(dados.soilUmUm));
-    Serial.println("Lum PC: " + String(dados.lumPC));
-    Serial.println("Soil Cap1: " + String(dados.soilCap1));
-    Serial.println("Soil Cap2: " + String(dados.soilCap2));
-    Serial.println("Temperature Estufa: " + String(dados.temperatureEstufa));
-    Serial.println("Humidity Estufa: " + String(dados.humidityEstufa));
-  }
-}
-
-void sendRamData() {
-   // Variável para armazenar o índice do início de um novo conjunto de dados
-  int startIdx = 0;
-  unsigned long lastAppendTime = 0;
-  const unsigned long appendInterval = 5000;
-  // Iterar sobre o vetor de dados
-  for (size_t i = 0; i < dadosArmazenados.size(); ++i) {
-
-    const auto &dados = dadosArmazenados[i];
-
-    //Coping the sending data method in here
-    bool ready = GSheet.ready();
-    if (ready) {
-
-      FirebaseJson response;
-      FirebaseJson valueRange;
-
-      debugln("\nAppend RAM VALUES to spreadsheet ...");
-      debugln("*********");
-
-      //Dados em linha
-      valueRange.add("majorDimension", "ROWS");
-      //rawdate
-      valueRange.set("values/[0]/[0]", dados.epochTime);
-      //data
-      valueRange.set("values/[0]/[1]", dados.currentDate);
-      //hora
-      valueRange.set("values/[0]/[2]", dados.formattedTime);
-      //Temperatura Externa
-      valueRange.set("values/[0]/[3]", dados.temperatureModulo);
-      //Umidade do AR Externo
-      valueRange.set("values/[0]/[4]", dados.humidityModulo);
-      //Temperatura Termistor
-      valueRange.set("values/[0]/[5]", dados.TempCelsius);
-      //Umidade Solo 1 Resistivo Externo Mudas
-      valueRange.set("values/[0]/[6]", dados.soilUmUm);
-      //Luminosidade
-      valueRange.set("values/[0]/[7]", dados.lumPC);
-      //Umidade Solo Capacitivo 1 - Provavelmente Estufas
-      valueRange.set("values/[0]/[8]", dados.soilCap1);
-      //Umidade Solo Capacitivo 2
-      valueRange.set("values/[0]/[9]", dados.soilCap2);
-      //Temperatura Estufa
-      valueRange.set("values/[0]/[10]", dados.temperatureEstufa);
-      //Umidade do AR Estufa
-      valueRange.set("values/[0]/[11]", dados.humidityEstufa);
-
-
-      bool success = GSheet.values.append(&response /* returned response */, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o" /* spreadsheet Id to append */, sheetAppend + "A2" /* range to append */, &valueRange /* data range to append */);
-      if (success) {
-
-        response.toString(Serial, true);
-        dadosArmazenados.erase(dadosArmazenados.begin() + i);
-
-      } else {
-
-        debugln(GSheet.errorReason());
-        debugln();
-      }
-      debugln(ESP.getFreeHeap());
-
-      delay(15000); //Change this delay for a milis() method
-    } else {
-      debugln("GSheet not ready or waiting for next interval");
-    }
-  }
-}
-
-void epochCalculate(time_t epochTime) {
-
-  //Inserir data e hora
-  debug("Epoch Time: ");
-  debugln(epochTime);
-
-  //Get a time structure
-  struct tm *ptm = gmtime((time_t *)&epochTime);
-
-  monthDay = ptm->tm_mday;
-  debug("Month day: ");
-  debugln(monthDay);
-
-  currentMonth = ptm->tm_mon + 1;
-  debug("Month: ");
-  debugln(currentMonth);
-
-  currentYear = ptm->tm_year + 1900;
-  debug("Year: ");
-  debugln(currentYear);
-
-  //Print complete date:
-  currentDate = String(currentMonth) + "-" + String(monthDay) + "-" + String(currentYear);
-  debug("Current date: ");
-  debugln(currentDate);
-
-  formattedTime = timeClient.getFormattedTime();
-  debug("Formatted Time: ");
-  debugln(formattedTime);
-}
-
+void saveValues();
+void showDatainRAM();
+void sendRamData();
 
 //--------------Setup
 void setup() {
@@ -537,12 +165,10 @@ void setup() {
   beta = (log(RT1 / RT2)) / ((1 / T1) - (1 / T2));  // calculo de beta
   Rinf = R0 * exp(-beta / T0);                      // calculo de Rinf
 
-
   // Mux pins as OUTPUTS
   pinMode(MUXA, OUTPUT);
   pinMode(MUXB, OUTPUT);
   pinMode(MUXC, OUTPUT);
-
 
   //Greenhouse relay pin
   pinMode(sprayPin, OUTPUT);
@@ -558,14 +184,12 @@ void setup() {
   //WiFi Novo
   connectWiFi();
 
-
   //Inicializando Gsheets
   if (WiFi.status() == WL_CONNECTED) {
     debugln("\nWi-Fi connected!");
 
     // Set the callback for Google API access token generation status (for debug only)
     GSheet.setTokenCallback(tokenStatusCallback);
-
     GSheet.setPrerefreshSeconds(10 * 60);
     GSheet.begin(CLIENT_EMAIL, PROJECT_ID, PRIVATE_KEY);
 
@@ -650,7 +274,6 @@ void loop() {
 
   // Verifica se a conexão com a Internet está ativa a cada intervalo de tempo
   if (WiFi.status() == WL_CONNECTED) {
-
 
     timeClient.update();
     epochTime = timeClient.getEpochTime();
@@ -742,3 +365,6 @@ void loop() {
   debug(tempoCiclo);
   delay(tempoCiclo);
 }
+
+//Para amanhã, verificar novamente se os dados estao sendo apagados após envio;
+//Iniciar o calculo de média para enviar para a memória Flash as médias por hora
