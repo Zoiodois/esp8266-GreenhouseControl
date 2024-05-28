@@ -6,7 +6,7 @@
 /********************************************************
 */
 //Change you Wifi and Gsheets API credentials before use
-// Another Ignore
+//Ignore
 //Debug State Set
 #define DEBUG 1
 
