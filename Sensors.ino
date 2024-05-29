@@ -47,7 +47,6 @@ void Load_DHT11_Data() {
 
 //Leitura Sensores Resistivos
 int readPin() {
-
   media = 0;
   somatoria = 0;
   analogRead(A0);
@@ -98,4 +97,71 @@ void epochCalculate(time_t epochTime) {
   formattedTime = timeClient.getFormattedTime();
   debug("Formatted Time: ");
   debugln(formattedTime);
+}
+void muxReadings(){
+  //MUX Readings
+  for (int channel = 0; channel < 8; channel++) {
+    //Chanel 0,1 and 3 are avaiable
+    selectChannel(channel);  // Seleciona o canal do MUX
+
+    //Varistor Temperature
+    if (channel == 2) {
+      leitura = 0;
+      leitura = readPin();
+      Vout = Vin * ((float)(media) / 1023.0);  // calculo de V0 e leitura de A0
+      Rout = (Rt * Vout / (Vin - Vout));       // calculo de Rout
+      TempKelvin = (beta / log(Rout / Rinf));  // calculo da temp. em Kelvins
+      TempCelsius = TempKelvin - 273.15;       // calculo da temp. em Celsius
+      debug("Temperatura em Celsius: ");       // imprime no monitor serial
+      debugln(TempCelsius);                    // imprime temperatura Celsius
+
+    }
+
+    else if (channel == 4) {
+      //Have a 10k resistor between pin and 3.3v
+      //Soil Moisture Resistive sensor
+      leitura = 0;
+      leitura = readPin();
+      soilUmUm = map(leitura, 0, 1023, 100, 0);
+      debug("Umidade Resistiva do Solo 1 em : ");
+      debug(soilUmUm);
+      debugln("%");
+    }
+
+    else if (channel == 5) {
+      //Have a 10k resistor between pin and 3.3v
+      //Luminosity Reading
+      leitura = 0;
+      leitura = readPin();
+      lumPC = map(leitura, 0, 1023, 100, 0);
+      debugln();
+      debug("Luminosidade em : ");
+      debug(lumPC);
+      debugln("%");
+
+    }
+
+    else if (channel == 6) {
+
+      //Capacitive Sensor
+      leitura = 0;
+      leitura = readPin();
+      soilCap1 = map(leitura, 0, 1023, 100, 0);
+      debugln();
+      debug("Capacity Humidity Reading : ");
+      debug(soilCap1);
+      debugln("%");
+
+    } else if (channel == 7) {
+
+      //Capacitive Sensor
+      leitura = 0;
+      leitura = readPin();
+      soilCap2 = map(leitura, 0, 1023, 100, 0);
+      debugln();
+      debug("Capacity Humidity Reading : ");
+      debug(soilCap2);
+      debugln("%");
+    }
+  }
 }

@@ -18,7 +18,7 @@ struct Dados {
 void saveValues() {
   debugln("Savind Data on Ram");
 
-    Dados dadosEstruturados;
+  Dados dadosEstruturados;
   dadosEstruturados.epochTime = epochTime;
   dadosEstruturados.currentDate = currentDate;
   dadosEstruturados.formattedTime = formattedTime;
@@ -56,10 +56,7 @@ void showDatainRAM() {
 }
 
 void sendRamData() {
-   // Variável para armazenar o índice do início de um novo conjunto de dados
-  int startIdx = 0;
-  unsigned long lastAppendTime = 0;
-  const unsigned long appendInterval = 5000;
+
   // Iterar sobre o vetor de dados
   for (size_t i = 0; i < dadosArmazenados.size(); ++i) {
 
@@ -116,7 +113,6 @@ void sendRamData() {
       }
       debugln(ESP.getFreeHeap());
 
-      delay(15000); //Change this delay for a milis() method
     } else {
       debugln("GSheet not ready or waiting for next interval");
     }

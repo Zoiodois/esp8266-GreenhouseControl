@@ -10,7 +10,7 @@ void tokenStatusCallback(TokenInfo info) {
 
 //Enviador de Dados
 void loop_enviadorDados() {
-
+  //Apagar, não mais necessário
   bool ready = GSheet.ready();
   if (ready && millis() - ms > 15000) {
     ms = millis();
@@ -82,12 +82,14 @@ void loop_receberDados() {
     FirebaseJsonData result3;  //Estufa Ligada
     FirebaseJsonData result4;  //Tempo Irrigacao
     FirebaseJsonData result5;  //Valor Limite Irrigação
+    FirebaseJsonData result6;  //Time between Sending Data
+
 
 
     debugln("Get spreadsheet values from range...");
     debugln("---------------------------------------------------------------");
 
-    bool success = GSheet.values.get(&response2, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o", sheetValues + "A2:E2");
+    bool success = GSheet.values.get(&response2, "1ghTXvGyQEu-iUEI7eEYKt2wTln5SJcn2WORhD5_FF_o", sheetValues + "A2:F2");
 
     response2.get(result /* FirebaseJsonData */, "values/[0]/[0]" /* key or path */);
 
@@ -99,11 +101,14 @@ void loop_receberDados() {
 
     response2.get(result5 /* FirebaseJsonData */, "values/[0]/[4]" /* key or path */);
 
+    response2.get(result6 /* FirebaseJsonData */, "values/[0]/[5]" /* key or path */);
+
+
     response2.toString(Serial, true);
 
-    debugln("Delay betwen Cicles:");
-    tempoCiclo = result.to<int>();
-    debugln(tempoCiclo);
+    debugln("Delay betwen Readings:");
+    readingInterval = result.to<int>();
+    debugln(readingInterval);
 
     debugln("Greenhouse Humidity Treshold Limit");
     limiarEstufa = result2.to<int>();
@@ -120,6 +125,10 @@ void loop_receberDados() {
     debugln("Soil Humidity Treshold Limit");
     limiteUmidade = result5.to<int>();
     debugln(limiteUmidade);
+
+    debugln("Time between Sending Data");
+    sendDataInterval = result6.to<int>();
+    debugln(sendDataInterval);
 
   } else {
 

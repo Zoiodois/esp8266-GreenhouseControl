@@ -1,12 +1,12 @@
 
 /*******************************************************
- * ESP8266 Saving Values in Ram case internet offline / Code Upgrade
+ * ESP8266 Saving Values in Ram case internet offline
  * 05/2024 - Felipe Buhrer
  */
 /********************************************************
 */
 //Change you Wifi and Gsheets API credentials before use
-//Ignore
+
 //Debug State Set
 #define DEBUG 1
 
@@ -34,7 +34,7 @@ unsigned long mr = 0;
 void tokenStatusCallback(TokenInfo info);
 
 //Variables for testing on Google Sheets
-String sheetAppend = "Teste!"; //Dados
+String sheetAppend = "Teste!";        //Dados
 String sheetValues = "TemposTeste!";  // Config
 
 //Temperatura Termistor
@@ -73,38 +73,22 @@ float humidityModulo = 0.0;
 DHT dhtEstufa(DHTESTUFA, DHTTYPE);
 float temperatureEstufa = 0.0;
 float humidityEstufa = 0.0;
-
+//ALL Sensors
 //Termistor Sensor
 float mediaVaristor = 0.0;
-
 //LDR sensor
 float lumPC = 0.0;
-
 //Resistive Soil Moisture
 float soilUmUm = 0.0;
-
 //Sensor Umidade Solo Capacitivo 1
 float soilCap1 = 0.0;
-
 //Sensor Umidade Solo Capacitivo 2
 float soilCap2 = 0.0;
-
-//Greenhous Activity on/off
-bool grenhouseON = 0;
-int limiarEstufa = 80;
-
-//Variables for cicle Delays and Irrigation system
-int tempoCiclo = 6000;        // 10 min
-int tempoIrrigacao = 300000;  //5 min
-int limiteUmidade = 80;       //45%
-
-const int NUMERO_AMOSTRAS = 40;  //Amostras para mandar apenas a media para a planilha
+//Average Calculation
 long somatoria = 0;
 int leitura_sensor = 0;
 float media;
 float leitura;
-
-
 
 //Epoch Time Config
 const long utcOffsetInSeconds = -10800;  //Ajuste de data e hora
@@ -120,11 +104,43 @@ String currentDate;
 String formattedTime;
 
 
+//---** Variables Intervals
+//Greenhous Activity on/off
+bool grenhouseON = 0;
+int limiarEstufa = 80;
+
+//Variables for cicle Delays and Irrigation system
+int readingInterval = 6000;  // 10 min
+int limiteUmidade = 80;      //45%
+unsigned long lastReading = 0;
+unsigned long lastSendedData = 0;
+unsigned long sendDataInterval = 60000;
+
+const int NUMERO_AMOSTRAS = 40;  //Amostras para mandar apenas a media para a planilha
+
+enum State {
+  IDLE,
+  CHECK_SOIL_MOISTURE,
+  IRRIGATION_ON,
+  IRRIGATION_WAIT,
+  IRRIGATION_OFF
+};
+
+State currentState = IDLE;
+unsigned long previousMillis = 0;
+unsigned long irrigationStartMillis = 0;
+unsigned long tempoIrrigacao = 300000;  //5 min
+
+// Variáveis globais para armazenar condições
+bool isSpraying = false;
+
 //--------------------------Methods
 //Connect Wifi
 void connectWiFi();
 
 //**Sensors
+//Mux Readings
+void muxReadings();
 //dht11
 void Load_DHT11_Data();
 //Leitura Sensores Resistivos
@@ -132,7 +148,7 @@ int readPin();
 //Mux port selection code
 void selectChannel();
 //Calculate Epoch Dependent Variables
-void epochCalculate();
+void epochCalculate(time_t);
 
 //**Gsheets --
 void tokenStatusCallback();
@@ -202,169 +218,94 @@ void setup() {
   timeClient.setTimeOffset(-10800);
 }
 
+
 void loop() {
 
-  //MUX Readings
-  for (int channel = 0; channel < 8; channel++) {
-    //Chanel 0,1 and 3 are avaiable
-    selectChannel(channel);  // Seleciona o canal do MUX
+  unsigned long currentMillis = millis();
 
-    //Varistor Temperature
-    if (channel == 2) {
-      leitura = 0;
-      leitura = readPin();
-      Vout = Vin * ((float)(media) / 1023.0);  // calculo de V0 e leitura de A0
-      Rout = (Rt * Vout / (Vin - Vout));       // calculo de Rout
-      TempKelvin = (beta / log(Rout / Rinf));  // calculo da temp. em Kelvins
-      TempCelsius = TempKelvin - 273.15;       // calculo da temp. em Celsius
-      debug("Temperatura em Celsius: ");       // imprime no monitor serial
-      debugln(TempCelsius);                    // imprime temperatura Celsius
+  muxReadings();
+  Load_DHT11_Data();
+  Serial.println("******************");
+  Serial.println(currentState);
+  Serial.println("*******");
 
-    }
+  switch (currentState) {
+    Serial.println("**---Iniciando witch state ---");
+    case IDLE:
+      // Verifica a umidade do solo
+      if (soilUmUm < limiteUmidade) {
+        // Verifica se o pino da estufa está ligado e desliga se necessário
+        if (isSpraying) {
+          Serial.println("**Spray LIGADO Status Check condicao 1");
+          digitalWrite(sprayPin, HIGH);
+          isSpraying = false;
+          Serial.println("**Spray DESLIGADO PELA CONDICAO 1");
+        }
+        // Liga o pino de irrigação e marca o início
+        digitalWrite(mudasPin, LOW);
+        debugln("Relé Irrigação Acionado");
+        irrigationStartMillis = currentMillis;
+        currentState = IRRIGATION_ON;
+      } else if (grenhouseON && humidityEstufa < limiarEstufa) {
+        digitalWrite(sprayPin, LOW);
+        isSpraying = true;
+        Serial.println("**Spray LIGADO pelo esleif da condição 1");
+      }
+      break;
 
-    else if (channel == 4) {
-      //Have a 10k resistor between pin and 3.3v
-      //Soil Moisture Resistive sensor
-      leitura = 0;
-      leitura = readPin();
-      soilUmUm = map(leitura, 0, 1023, 100, 0);
-      debug("Umidade Resistiva do Solo 1 em : ");
-      debug(soilUmUm);
-      debugln("%");
-    }
+    case IRRIGATION_ON:
+      currentState = IRRIGATION_WAIT;
+      break;
 
-    else if (channel == 5) {
-      //Have a 10k resistor between pin and 3.3v
-      //Luminosity Reading
-      leitura = 0;
-      leitura = readPin();
-      lumPC = map(leitura, 0, 1023, 100, 0);
-      debugln();
-      debug("Luminosidade em : ");
-      debug(lumPC);
-      debugln("%");
+    case IRRIGATION_WAIT:
+      // Espera até que a duração da irrigação tenha passado
+      if (currentMillis - irrigationStartMillis >= tempoIrrigacao) {
+        digitalWrite(mudasPin, HIGH);
+        debugln("Relé Irrigação Desligado");
+        currentState = IRRIGATION_OFF;
+      }
+      break;
 
-    }
+    case IRRIGATION_OFF:
+      Serial.println("**Iniciando Condição 4");
+      // Restaura o estado do pino da estufa se necessário
+      if (humidityEstufa < limiarEstufa) {
+        digitalWrite(sprayPin, LOW);
+        Serial.println("**Spray LIGADO pela condicao 4");
+      }
+      currentState = IDLE;
+      isSpraying = true;
 
-    else if (channel == 6) {
-
-      //Capacitive Sensor
-      leitura = 0;
-      leitura = readPin();
-      soilCap1 = map(leitura, 0, 1023, 100, 0);
-      debugln();
-      debug("Capacity Humidity Reading : ");
-      debug(soilCap1);
-      debugln("%");
-
-    } else if (channel == 7) {
-
-      //Capacitive Sensor
-      leitura = 0;
-      leitura = readPin();
-      soilCap2 = map(leitura, 0, 1023, 100, 0);
-      debugln();
-      debug("Capacity Humidity Reading : ");
-      debug(soilCap2);
-      debugln("%");
-    }
+      break;
   }
 
-  Load_DHT11_Data();
+  if (currentMillis - lastReading >= readingInterval) {
 
-  // Verifica se a conexão com a Internet está ativa a cada intervalo de tempo
-  if (WiFi.status() == WL_CONNECTED) {
+    if (WiFi.status() == WL_CONNECTED) {
 
-    timeClient.update();
-    epochTime = timeClient.getEpochTime();
-    epochCalculate(epochTime);
-
-    bool conectionError = true;
-
-    for (int i = 0; i < 3; i++) {
-      if (GSheet.ready()) {
-        // Se a conexão estiver pronta, execute as funções relacionadas ao Google Sheets
-        loop_enviadorDados();
-        loop_receberDados();
-        conectionError = false;
-        break;  // Sai do loop de tentativas se a conexão estiver pronta
-      } else {
-        // Set the callback for Google API access token generation status (for debug only)
-        //GSheet.setTokenCallback(tokenStatusCallback);
-
-        debugln("Trying to reconnect to Google Sheets...");
-        GSheet.setPrerefreshSeconds(10 * 60);
-        GSheet.begin(CLIENT_EMAIL, PROJECT_ID, PRIVATE_KEY);
-        delay(5000);  // Aguarda um curto período antes de tentar novamente
-      }
-    }
-
-    if (conectionError) {
+      timeClient.update();
+      epochTime = timeClient.getEpochTime();
+      epochCalculate(epochTime);
+      saveValues();
+    } else {
+      epochTime = epochTime + (readingInterval / 1000);
+      epochCalculate(epochTime);
       saveValues();
     }
+
+    lastReading = currentMillis;
   }
 
-  else {
-    debugln("Disconnected from Wi-Fi. Reconnecting...");
-
+  if (WiFi.status() == WL_CONNECTED) {
+    if (currentMillis - lastSendedData >= sendDataInterval) {
+      sendRamData();
+      loop_receberDados();
+      lastSendedData = currentMillis;
+    }
+  } else {
     WiFi.disconnect();
     delay(500);
 
     connectWiFi();
-
-    epochTime = epochTime + (tempoCiclo / 1000);
-    epochCalculate(epochTime);
-
-    saveValues();
   }
-
-  //Greenhouse Relay On/Off Logic
-  if (grenhouseON == 1) {
-
-    if (humidityEstufa < limiarEstufa) {
-      digitalWrite(sprayPin, LOW);
-    } else {
-      digitalWrite(sprayPin, HIGH);
-    }
-
-  } else {
-
-    digitalWrite(sprayPin, HIGH);
-  }
-
-
-  //Irrigation Relay On/Off Logic
-  if (soilUmUm < limiteUmidade) {
-
-    //check to only runs 1 valve at a time, prevent power supply ishues
-    if (humidityEstufa < limiarEstufa) {
-      digitalWrite(sprayPin, HIGH);
-      delay(1000);
-    }
-
-    debugln("Relé Irrigação Acionado");
-    digitalWrite(mudasPin, LOW);
-    delay(tempoIrrigacao);
-    digitalWrite(mudasPin, HIGH);
-    debugln("Relé Irrigação Desligado");
-
-    if (humidityEstufa < limiarEstufa) {
-      digitalWrite(sprayPin, LOW);
-    }
-  }
-
-  if (!dadosArmazenados.empty() && WiFi.status() == WL_CONNECTED) {
-    // Enviar os dados armazenados
-    sendRamData();
-  }
-
-
-  showDatainRAM();
-
-  debugln("Cicle Delay: ");
-  debug(tempoCiclo);
-  delay(tempoCiclo);
 }
-
-//Para amanhã, verificar novamente se os dados estao sendo apagados após envio;
-//Iniciar o calculo de média para enviar para a memória Flash as médias por hora
