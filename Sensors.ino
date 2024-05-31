@@ -12,8 +12,9 @@ void Load_DHT11_Data() {
     humidityModulo = 0.0;
   }
   //-----------------------------------------------------------
-  Serial.printf("Temperature Outside: %f °C\n", temperatureModulo);
-  Serial.printf("Humidity Outside: %f %%\n", humidityModulo);
+  debugln( Serial.printf("Temperature Outside: %f °C\n", temperatureModulo) );
+  debugln(Serial.printf("Humidity Outside: %f %%\n", humidityModulo));
+  
 
   //Greenhouse Readings
   //-----------------------------------------------------------
@@ -40,8 +41,9 @@ void Load_DHT11_Data() {
   }
 
   //-----------------------------------------------------------
-  Serial.printf("Temperature Estufa: %f °C\n", temperatureEstufa);
-  Serial.printf("Humidity Estufa: %f %%\n", humidityEstufa);
+  debugln(  Serial.printf("Temperature Estufa: %f °C\n", temperatureEstufa)); 
+  debugln(  Serial.printf("Humidity Estufa: %f %%\n", humidityEstufa));
+
 }
 
 
@@ -122,7 +124,7 @@ void muxReadings(){
       //Soil Moisture Resistive sensor
       leitura = 0;
       leitura = readPin();
-      soilUmUm = map(leitura, 0, 1023, 100, 0);
+      soilUmUm = map(leitura, 0, 1023, 0, 100);
       debug("Umidade Resistiva do Solo 1 em : ");
       debug(soilUmUm);
       debugln("%");
@@ -144,9 +146,14 @@ void muxReadings(){
     else if (channel == 6) {
 
       //Capacitive Sensor
+      //As the soil gets wetter, the output value decreases
+      //Configure your on values by tests
+      //Internet Values : < 277 is too wet 
+      //                  277 – 380 is the target range 
+      //                  > 380 is too dry
       leitura = 0;
       leitura = readPin();
-      soilCap1 = map(leitura, 0, 1023, 100, 0);
+      soilCap1 = map(leitura, 277, 380, 100, 0);
       debugln();
       debug("Capacity Humidity Reading : ");
       debug(soilCap1);
@@ -157,7 +164,7 @@ void muxReadings(){
       //Capacitive Sensor
       leitura = 0;
       leitura = readPin();
-      soilCap2 = map(leitura, 0, 1023, 100, 0);
+      soilCap2 = map(leitura, 277, 380, 100, 0);
       debugln();
       debug("Capacity Humidity Reading : ");
       debug(soilCap2);

@@ -16,6 +16,7 @@ struct Dados {
 
 //Method for saving values in RAM
 void saveValues() {
+  Serial.println("Savind Data on Ram");
   debugln("Savind Data on Ram");
 
   Dados dadosEstruturados;
@@ -117,4 +118,49 @@ void sendRamData() {
       debugln("GSheet not ready or waiting for next interval");
     }
   }
+}
+
+
+void calculateAveragesAndClear() {
+  // Variáveis para somas
+  float totalTemperatureModulo = 0;
+  float totalHumidityModulo = 0;
+  float totalTempCelsius = 0;
+  float totalSoilUmUm = 0;
+  float totalLumPC = 0;
+  float totalSoilCap1 = 0;
+  float totalSoilCap2 = 0;
+  float totalTemperatureEstufa = 0;
+  float totalHumidityEstufa = 0;
+
+  // Somar valores de todos os conjuntos
+  for (const auto& dados : dadosArmazenados) {
+    totalTemperatureModulo += dados.temperatureModulo;
+    totalHumidityModulo += dados.humidityModulo;
+    totalTempCelsius += dados.TempCelsius;
+    totalSoilUmUm += dados.soilUmUm;
+    totalLumPC += dados.lumPC;
+    totalSoilCap1 += dados.soilCap1;
+    totalSoilCap2 += dados.soilCap2;
+    totalTemperatureEstufa += dados.temperatureEstufa;
+    totalHumidityEstufa += dados.humidityEstufa;
+  }
+
+  // Calcular médias
+  size_t count = dadosArmazenados.size();
+  Dados averageData;
+  averageData.temperatureModulo = totalTemperatureModulo / count;
+  averageData.humidityModulo = totalHumidityModulo / count;
+  averageData.TempCelsius = totalTempCelsius / count;
+  averageData.soilUmUm = totalSoilUmUm / count;
+  averageData.lumPC = totalLumPC / count;
+  averageData.soilCap1 = totalSoilCap1 / count;
+  averageData.soilCap2 = totalSoilCap2 / count;
+  averageData.temperatureEstufa = totalTemperatureEstufa / count;
+  averageData.humidityEstufa = totalHumidityEstufa / count;
+
+  // Limpar o vetor e armazenar o conjunto de dados calculado
+  dadosArmazenados.clear();
+  dadosArmazenados.shrink_to_fit();
+  dadosArmazenados.push_back(averageData);
 }

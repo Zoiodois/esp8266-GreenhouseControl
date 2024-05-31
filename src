@@ -8,7 +8,7 @@
 //Change you Wifi and Gsheets API credentials before use
 
 //Debug State Set
-#define DEBUG 1
+#define DEBUG 0
 
 #if DEBUG == 1
 #define debug(x) Serial.print(x)
@@ -117,6 +117,7 @@ unsigned long lastSendedData = 0;
 unsigned long sendDataInterval = 60000;
 
 const int NUMERO_AMOSTRAS = 40;  //Amostras para mandar apenas a media para a planilha
+const size_t MAX_DATA_SETS = 60; //Max sets before average calculation
 
 enum State {
   IDLE,
@@ -167,6 +168,7 @@ std::vector<Dados> dadosArmazenados;
 void saveValues();
 void showDatainRAM();
 void sendRamData();
+void calculateAveragesAndClear();
 
 //--------------Setup
 void setup() {
@@ -225,21 +227,21 @@ void loop() {
 
   muxReadings();
   Load_DHT11_Data();
-  Serial.println("******************");
-  Serial.println(currentState);
-  Serial.println("*******");
+  debugln("******************");
+  debugln(currentState);
+  debugln("*******");
 
   switch (currentState) {
-    Serial.println("**---Iniciando witch state ---");
+    debugln("**---Iniciando witch state ---");
     case IDLE:
       // Verifica a umidade do solo
       if (soilUmUm < limiteUmidade) {
         // Verifica se o pino da estufa está ligado e desliga se necessário
         if (isSpraying) {
-          Serial.println("**Spray LIGADO Status Check condicao 1");
+          debugln("**Spray LIGADO Status Check condicao 1");
           digitalWrite(sprayPin, HIGH);
           isSpraying = false;
-          Serial.println("**Spray DESLIGADO PELA CONDICAO 1");
+          debugln("**Spray DESLIGADO PELA CONDICAO 1");
         }
         // Liga o pino de irrigação e marca o início
         digitalWrite(mudasPin, LOW);
@@ -249,7 +251,7 @@ void loop() {
       } else if (grenhouseON && humidityEstufa < limiarEstufa) {
         digitalWrite(sprayPin, LOW);
         isSpraying = true;
-        Serial.println("**Spray LIGADO pelo esleif da condição 1");
+        debugln("**Spray LIGADO pelo esleif da condição 1");
       }
       break;
 
@@ -267,11 +269,11 @@ void loop() {
       break;
 
     case IRRIGATION_OFF:
-      Serial.println("**Iniciando Condição 4");
+      debugln("**Iniciando Condição 4");
       // Restaura o estado do pino da estufa se necessário
       if (humidityEstufa < limiarEstufa) {
         digitalWrite(sprayPin, LOW);
-        Serial.println("**Spray LIGADO pela condicao 4");
+        debugln("**Spray LIGADO pela condicao 4");
       }
       currentState = IDLE;
       isSpraying = true;
@@ -296,6 +298,7 @@ void loop() {
     lastReading = currentMillis;
   }
 
+
   if (WiFi.status() == WL_CONNECTED) {
     if (currentMillis - lastSendedData >= sendDataInterval) {
       sendRamData();
@@ -303,9 +306,129 @@ void loop() {
       lastSendedData = currentMillis;
     }
   } else {
-    WiFi.disconnect();
+    //WiFi.disconnect();
     delay(500);
 
     connectWiFi();
   }
+    // Simular a adição de dados
+  if (dadosArmazenados.size() > MAX_DATA_SETS) {
+      calculateAveragesAndClear();
+  }
+
+  // Verifica a quantidade de memória heap livre
+  size_t freeHeap = ESP.getFreeHeap();
+  Serial.print("Free heap: ");
+  Serial.print(freeHeap);
+  Serial.println(" bytes");
+
+  Serial.print("Tamanho dados armazenados :");
+  Serial.println(dadosArmazenados.size());
+
+
 }
+
+
+
+//----DELETAR
+/*
+
+
+  if (WiFi.status() == WL_CONNECTED) {
+    // Envie os dados da RAM caso Tenha iternet e dados na RAM
+    if (currentMillis - lastSendTime >= sendInterval || !dadosArmazenados.empty()) {
+      if (!dadosArmazenados.empty()) {
+        // Enviar os dados armazenados
+        bool success = sendRamData();
+        if (success) {
+
+          lastSendTime = currentMillis;  // Atualiza o tempo do último envio
+        }
+      } else {
+        // Enviar dados atuais
+        //Atualizar as variaveis aqui
+        timeClient.update();
+        epochTime = timeClient.getEpochTime();
+        epochCalculate(epochTime);
+
+
+        bool success = loop_enviadorDados();
+        if (success) {
+          lastSendTime = currentMillis;  // Atualiza o tempo do último envio
+        } else {
+          // Salva os dados atuais se o envio falhar
+          saveValues();
+        }
+      }
+    } else {
+      debugln("Disconnected from Wi-Fi. Reconnecting...");
+
+      WiFi.disconnect();
+      delay(500);
+
+      connectWiFi();
+
+      epochTime = epochTime + (tempoCiclo / 1000);
+      epochCalculate(epochTime);
+
+      saveValues();
+    }
+
+
+
+
+
+
+    bool conectionError = true;
+
+    for (int i = 0; i < 3; i++) {
+      if (GSheet.ready()) {
+        // Se a conexão estiver pronta, execute as funções relacionadas ao Google Sheets
+        loop_enviadorDados();
+        loop_receberDados();
+        conectionError = false;
+        break;  // Sai do loop de tentativas se a conexão estiver pronta
+      } else {
+        // Set the callback for Google API access token generation status (for debug only)
+        //GSheet.setTokenCallback(tokenStatusCallback);
+
+        debugln("Trying to reconnect to Google Sheets...");
+        GSheet.setPrerefreshSeconds(10 * 60);
+        GSheet.begin(CLIENT_EMAIL, PROJECT_ID, PRIVATE_KEY);
+        delay(5000);  // Aguarda um curto período antes de tentar novamente
+      }
+    }
+
+    if (conectionError) {
+      saveValues();
+    }
+  } else {
+    debugln("Disconnected from Wi-Fi. Reconnecting...");
+
+    WiFi.disconnect();
+    delay(500);
+
+    connectWiFi();
+
+    epochTime = epochTime + (tempoCiclo / 1000);
+    epochCalculate(epochTime);
+
+    saveValues();
+  }
+
+  delay(30000);
+
+if (!dadosArmazenados.empty() && WiFi.status() == WL_CONNECTED) {
+  // Enviar os dados armazenados
+  sendRamData();
+}
+
+
+
+//showDatainRAM();
+
+//debugln("Cicle Delay: ");
+//debug(tempoCiclo);
+//delay(tempoCiclo);
+
+*/
