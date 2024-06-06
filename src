@@ -1,6 +1,8 @@
 
 /*******************************************************
  * ESP8266 Saving Values in Ram case internet offline
+ *Cache Enought for 100Data readings
+ *3 Days in hourly Averages Calculation
  * 05/2024 - Felipe Buhrer
  */
 /********************************************************
@@ -31,11 +33,12 @@
 #include "envKeys.h"
 unsigned long ms = 0;
 unsigned long mr = 0;
+unsigned long lastAttemptedReconnect = 0;
 void tokenStatusCallback(TokenInfo info);
 
 //Variables for testing on Google Sheets
-String sheetAppend = "Teste!";        //Dados
-String sheetValues = "TemposTeste!";  // Config
+String sheetAppend = "Dados!";        //Dados
+String sheetValues = "Config!";  // Config
 
 //Temperatura Termistor
 #define Vin 3.25          // define constante igual a 5.0
@@ -54,9 +57,6 @@ float Vout = 0.0;         // Vout in A0
 float Rout = 0.0;
 
 //Define Pins and Sensors
-//2 pins for valves outputs - D3 and D4
-//2 Pins for DHT reading - D1 and D2
-//3 pins for comunication with MUX - D5, D6, D7
 #define mudasPin 2   //D4 turn On plants Relay, runs on Low
 #define sprayPin 0   //D3 turn On Greenhouse Umidity Relay, runs on Low
 #define DHTESTUFA 5  //D1 Sensor Temp Greenhouse
@@ -73,6 +73,7 @@ float humidityModulo = 0.0;
 DHT dhtEstufa(DHTESTUFA, DHTTYPE);
 float temperatureEstufa = 0.0;
 float humidityEstufa = 0.0;
+
 //ALL Sensors
 //Termistor Sensor
 float mediaVaristor = 0.0;
@@ -89,6 +90,7 @@ long somatoria = 0;
 int leitura_sensor = 0;
 float media;
 float leitura;
+int NUMERO_AMOSTRAS = 40;  //Number of readings per Average
 
 //Epoch Time Config
 const long utcOffsetInSeconds = -10800;  //Ajuste de data e hora
@@ -101,23 +103,30 @@ int monthDay;
 int currentMonth;
 int currentYear;
 String currentDate;
-String formattedTime;
+char formattedTime[9];
 
 
-//---** Variables Intervals
+//---** Variables Changed on Sheets
+//Time to Upate Config Interval
+unsigned long recivingDataInterval = 300000;//5 minutes
 //Greenhous Activity on/off
 bool grenhouseON = 0;
 int limiarEstufa = 80;
-
 //Variables for cicle Delays and Irrigation system
-int readingInterval = 6000;  // 10 min
+int readingInterval = 60000;  // 1min
 int limiteUmidade = 80;      //45%
+unsigned long sendDataInterval = 600000;//10 minutes
+unsigned long averageCalculationInterval = 300000;//5 minutes
+
+//Counters
 unsigned long lastReading = 0;
 unsigned long lastSendedData = 0;
-unsigned long sendDataInterval = 60000;
+unsigned long lastAverage = 0;
+unsigned long lastUpdate = 0;
 
-const int NUMERO_AMOSTRAS = 40;  //Amostras para mandar apenas a media para a planilha
-const size_t MAX_DATA_SETS = 60; //Max sets before average calculation
+int numAverages = 0; // Contador de médias calculadas
+unsigned long maxTemp = 0; //Will be updated every cicle and send the max values
+unsigned long minTemp = 80; //Will be updated every cicle and send the min values
 
 enum State {
   IDLE,
@@ -163,7 +172,7 @@ void loop_receberDados();
 // Struct definition to save all data formats
 struct Dados;
 // Vector para armazenar os conjuntos de dados
-std::vector<Dados> dadosArmazenados;
+std::vector<Dados> dadosArmazenados; //Uses array in stack for that
 //Method for saving values in RAM
 void saveValues();
 void showDatainRAM();
@@ -231,11 +240,19 @@ void loop() {
   debugln(currentState);
   debugln("*******");
 
+  // Updating Data
+  if (currentMillis - lastUpdate > recivingDataInterval) {//1min teste
+      debugln("Updating Values");
+      loop_receberDados();
+      lastUpdate=currentMillis;
+  }
+
+
   switch (currentState) {
     debugln("**---Iniciando witch state ---");
     case IDLE:
       // Verifica a umidade do solo
-      if (soilUmUm < limiteUmidade) {
+      if (soilUmUm < limiteUmidade &&tempoIrrigacao> 0) {
         // Verifica se o pino da estufa está ligado e desliga se necessário
         if (isSpraying) {
           debugln("**Spray LIGADO Status Check condicao 1");
@@ -252,6 +269,10 @@ void loop() {
         digitalWrite(sprayPin, LOW);
         isSpraying = true;
         debugln("**Spray LIGADO pelo esleif da condição 1");
+      } else if (!grenhouseON){
+         digitalWrite(sprayPin, HIGH);
+        isSpraying = false;
+        debugln("**Spray DESLIGADO pelo esleif da condição 1");
       }
       break;
 
@@ -271,7 +292,7 @@ void loop() {
     case IRRIGATION_OFF:
       debugln("**Iniciando Condição 4");
       // Restaura o estado do pino da estufa se necessário
-      if (humidityEstufa < limiarEstufa) {
+      if (humidityEstufa < limiarEstufa && grenhouseON) {
         digitalWrite(sprayPin, LOW);
         debugln("**Spray LIGADO pela condicao 4");
       }
@@ -281,154 +302,54 @@ void loop() {
       break;
   }
 
+  //Reading Iterval
   if (currentMillis - lastReading >= readingInterval) {
 
     if (WiFi.status() == WL_CONNECTED) {
 
       timeClient.update();
       epochTime = timeClient.getEpochTime();
-      epochCalculate(epochTime);
       saveValues();
     } else {
       epochTime = epochTime + (readingInterval / 1000);
-      epochCalculate(epochTime);
       saveValues();
     }
 
     lastReading = currentMillis;
   }
 
-
+  //Send Data 
   if (WiFi.status() == WL_CONNECTED) {
     if (currentMillis - lastSendedData >= sendDataInterval) {
+
+      calculateSubsetAveragesAndStore();
       sendRamData();
-      loop_receberDados();
       lastSendedData = currentMillis;
     }
   } else {
-    //WiFi.disconnect();
-    delay(500);
+   if (currentMillis - lastAttemptedReconnect >= 500) {
+      lastAttemptedReconnect = currentMillis;
+      connectWiFi(); // Tentar reconectar
+    }
+  }
+  
+  // Average Data
+  if (currentMillis - lastAverage > averageCalculationInterval) {//1min teste
+      Serial.println("Invoking AverageAndStore");
+      calculateSubsetAveragesAndStore();
+      lastAverage=currentMillis;
+  }
 
-    connectWiFi();
-  }
-    // Simular a adição de dados
-  if (dadosArmazenados.size() > MAX_DATA_SETS) {
-      calculateAveragesAndClear();
-  }
+
 
   // Verifica a quantidade de memória heap livre
-  size_t freeHeap = ESP.getFreeHeap();
-  Serial.print("Free heap: ");
-  Serial.print(freeHeap);
-  Serial.println(" bytes");
+  //size_t freeHeap = ESP.getFreeHeap();
+  //Serial.print("Free heap: ");
+  //Serial.print(freeHeap);
+  //Serial.println(" bytes");
 
-  Serial.print("Tamanho dados armazenados :");
-  Serial.println(dadosArmazenados.size());
+  //Serial.print("Tamanho dados armazenados :");
+  //Serial.println(dadosArmazenados.size());
 
 
 }
-
-
-
-//----DELETAR
-/*
-
-
-  if (WiFi.status() == WL_CONNECTED) {
-    // Envie os dados da RAM caso Tenha iternet e dados na RAM
-    if (currentMillis - lastSendTime >= sendInterval || !dadosArmazenados.empty()) {
-      if (!dadosArmazenados.empty()) {
-        // Enviar os dados armazenados
-        bool success = sendRamData();
-        if (success) {
-
-          lastSendTime = currentMillis;  // Atualiza o tempo do último envio
-        }
-      } else {
-        // Enviar dados atuais
-        //Atualizar as variaveis aqui
-        timeClient.update();
-        epochTime = timeClient.getEpochTime();
-        epochCalculate(epochTime);
-
-
-        bool success = loop_enviadorDados();
-        if (success) {
-          lastSendTime = currentMillis;  // Atualiza o tempo do último envio
-        } else {
-          // Salva os dados atuais se o envio falhar
-          saveValues();
-        }
-      }
-    } else {
-      debugln("Disconnected from Wi-Fi. Reconnecting...");
-
-      WiFi.disconnect();
-      delay(500);
-
-      connectWiFi();
-
-      epochTime = epochTime + (tempoCiclo / 1000);
-      epochCalculate(epochTime);
-
-      saveValues();
-    }
-
-
-
-
-
-
-    bool conectionError = true;
-
-    for (int i = 0; i < 3; i++) {
-      if (GSheet.ready()) {
-        // Se a conexão estiver pronta, execute as funções relacionadas ao Google Sheets
-        loop_enviadorDados();
-        loop_receberDados();
-        conectionError = false;
-        break;  // Sai do loop de tentativas se a conexão estiver pronta
-      } else {
-        // Set the callback for Google API access token generation status (for debug only)
-        //GSheet.setTokenCallback(tokenStatusCallback);
-
-        debugln("Trying to reconnect to Google Sheets...");
-        GSheet.setPrerefreshSeconds(10 * 60);
-        GSheet.begin(CLIENT_EMAIL, PROJECT_ID, PRIVATE_KEY);
-        delay(5000);  // Aguarda um curto período antes de tentar novamente
-      }
-    }
-
-    if (conectionError) {
-      saveValues();
-    }
-  } else {
-    debugln("Disconnected from Wi-Fi. Reconnecting...");
-
-    WiFi.disconnect();
-    delay(500);
-
-    connectWiFi();
-
-    epochTime = epochTime + (tempoCiclo / 1000);
-    epochCalculate(epochTime);
-
-    saveValues();
-  }
-
-  delay(30000);
-
-if (!dadosArmazenados.empty() && WiFi.status() == WL_CONNECTED) {
-  // Enviar os dados armazenados
-  sendRamData();
-}
-
-
-
-//showDatainRAM();
-
-//debugln("Cicle Delay: ");
-//debug(tempoCiclo);
-//delay(tempoCiclo);
-
-*/

@@ -11,6 +11,15 @@ void Load_DHT11_Data() {
     temperatureModulo = 0.0;
     humidityModulo = 0.0;
   }
+  if(temperatureModulo > maxTemp ){
+    maxTemp = temperatureModulo;
+  }
+  else if(temperatureModulo < minTemp){
+    minTemp = temperatureModulo;
+  }
+
+  
+
   //-----------------------------------------------------------
   debugln( Serial.printf("Temperature Outside: %f °C\n", temperatureModulo) );
   debugln(Serial.printf("Humidity Outside: %f %%\n", humidityModulo));
@@ -58,7 +67,7 @@ int readPin() {
     somatoria = somatoria + r;
   }
   media = somatoria / NUMERO_AMOSTRAS;
-  delay(1000);
+  delay(100);
   return media;
 }
 
@@ -96,9 +105,9 @@ void epochCalculate(time_t epochTime) {
   debug("Current date: ");
   debugln(currentDate);
 
-  formattedTime = timeClient.getFormattedTime();
-  debug("Formatted Time: ");
-  debugln(formattedTime);
+  // Use strftime to format in one String
+  strftime(formattedTime, sizeof(formattedTime), "%H:%M:%S", ptm);
+
 }
 void muxReadings(){
   //MUX Readings
@@ -122,6 +131,7 @@ void muxReadings(){
     else if (channel == 4) {
       //Have a 10k resistor between pin and 3.3v
       //Soil Moisture Resistive sensor
+      //wILL HAVE TO CHANGE TYPE OF SENSOR
       leitura = 0;
       leitura = readPin();
       soilUmUm = map(leitura, 0, 1023, 0, 100);
@@ -153,7 +163,16 @@ void muxReadings(){
       //                  > 380 is too dry
       leitura = 0;
       leitura = readPin();
-      soilCap1 = map(leitura, 277, 380, 100, 0);
+      Serial.println();
+      Serial.print("esse é o valor da leitura média: ");
+      Serial.print(leitura);
+      Serial.println('----------');
+      soilCap1 = map(leitura, 327, 600, 100, 0);
+      //Valor de leitura com solo seco ~600
+      //Valor de leitura com solo umido superficialmente ~400
+      //Valor com solo umido maximo 350
+      //Valor com àgua 327
+      //Observed a variation of 10%+ from just irrigated soil
       debugln();
       debug("Capacity Humidity Reading : ");
       debug(soilCap1);
@@ -164,7 +183,7 @@ void muxReadings(){
       //Capacitive Sensor
       leitura = 0;
       leitura = readPin();
-      soilCap2 = map(leitura, 277, 380, 100, 0);
+      soilCap2 = map(leitura, 327, 600, 100, 0);
       debugln();
       debug("Capacity Humidity Reading : ");
       debug(soilCap2);

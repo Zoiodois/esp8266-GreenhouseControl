@@ -12,7 +12,7 @@ void connectWiFi() {
 
     unsigned long startTime = millis();  // Tempo inicial de tentativa de conexão
 
-    while (WiFi.status() != WL_CONNECTED && millis() - startTime < 60000) {
+    while (WiFi.status() != WL_CONNECTED && millis() - startTime < 50000) {
       delay(500);
       debug(".");
     }
@@ -22,7 +22,7 @@ void connectWiFi() {
       return;  // Se a conexão for bem-sucedida, interrompa o loop e retorne
     } else {
       debugln("\nFalha ao conectar ao WiFi!");
-      WiFi.disconnect();  // Desconecta do WiFi atual antes de tentar o próximo
+     // WiFi.disconnect();  // Desconecta do WiFi atual antes de tentar o próximo
     }
   }
 
