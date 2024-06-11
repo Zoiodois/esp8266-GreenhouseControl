@@ -28,3 +28,23 @@ void connectWiFi() {
 
   debugln("Todas as tentativas de conexão falharam.");
 }
+
+bool testInternetConnection() {
+  HTTPClient http;
+  http.begin(wifiClient, "http://www.google.com"); // URL para teste de conexão
+  int httpCode = http.GET();
+  http.end();
+
+  Serial.println(httpCode);
+  delay(500);
+
+  // Verifica se a requisição foi bem-sucedida
+  if (httpCode > 0) {
+    // Código de resposta HTTP 200 indica sucesso
+    if (httpCode == HTTP_CODE_OK) {
+      return true;
+    }
+  }
+  
+  return false;
+}

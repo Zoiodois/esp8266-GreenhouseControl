@@ -25,6 +25,7 @@
 #include <ESP_Google_Sheet_Client.h>  //Send data to Google Sheets
 #include <NTPClient.h>                //Get the EPOCH time from web
 #include <WiFiUdp.h>                  // Get the EPOCH time from web
+#include <ESP8266HTTPClient.h>        //HTTP Client for Conection Test
 #include <DHT.h>                      //Read DHT Sensors
 #include <vector>                     //Save Ram Data
 #include <String>                     //Save Ram Data
@@ -35,6 +36,7 @@ unsigned long ms = 0;
 unsigned long mr = 0;
 unsigned long lastAttemptedReconnect = 0;
 void tokenStatusCallback(TokenInfo info);
+unsigned long reconnectInterval = 500;
 
 //Variables for testing on Google Sheets
 String sheetAppend = "Dados!";        //Dados
@@ -147,6 +149,9 @@ bool isSpraying = false;
 //--------------------------Methods
 //Connect Wifi
 void connectWiFi();
+bool testInternetConnection();
+// Crie uma instância do WiFiClient
+WiFiClient wifiClient;
 
 //**Sensors
 //Mux Readings
@@ -302,10 +307,11 @@ void loop() {
       break;
   }
 
+  bool updated =  testInternetConnection();
   //Reading Iterval
   if (currentMillis - lastReading >= readingInterval) {
 
-    if (WiFi.status() == WL_CONNECTED) {
+    if (WiFi.status() == WL_CONNECTED && updated) {
 
       timeClient.update();
       epochTime = timeClient.getEpochTime();
@@ -320,19 +326,27 @@ void loop() {
 
   //Send Data 
   if (WiFi.status() == WL_CONNECTED) {
-    if (currentMillis - lastSendedData >= sendDataInterval) {
-
-      calculateSubsetAveragesAndStore();
-      sendRamData();
-      lastSendedData = currentMillis;
+    // Verificar a conexão com a Internet antes de enviar os dados
+    if (updated) {
+      if (currentMillis - lastSendedData >= sendDataInterval) {
+        calculateSubsetAveragesAndStore();
+        sendRamData();
+        lastSendedData = currentMillis;
+      }
+    } else {
+      // Se não houver conexão com a Internet, tentar reconectar
+      if (currentMillis - lastAttemptedReconnect >= reconnectInterval) {
+        lastAttemptedReconnect = currentMillis;
+        connectWiFi();  // Tentar reconectar
+      }
     }
   } else {
-   if (currentMillis - lastAttemptedReconnect >= 500) {
+    // Tentar reconectar se não estiver conectado ao WiFi
+    if (currentMillis - lastAttemptedReconnect >= reconnectInterval) {
       lastAttemptedReconnect = currentMillis;
-      connectWiFi(); // Tentar reconectar
+      connectWiFi();  // Tentar reconectar
     }
   }
-  
   // Average Data
   if (currentMillis - lastAverage > averageCalculationInterval) {//1min teste
       Serial.println("Invoking AverageAndStore");

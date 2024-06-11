@@ -10,15 +10,17 @@ void Load_DHT11_Data() {
     debugln("Failed to read from DHT Modulo sensor!");
     temperatureModulo = 0.0;
     humidityModulo = 0.0;
-  }
-  if(temperatureModulo > maxTemp ){
-    maxTemp = temperatureModulo;
-  }
-  else if(temperatureModulo < minTemp){
-    minTemp = temperatureModulo;
-  }
+  } else {
 
-  
+    if(temperatureModulo> maxTemp ){
+      maxTemp = temperatureModulo;
+    }
+    
+    if(temperatureModulo < minTemp){
+      minTemp = temperatureModulo;
+    }
+
+  }
 
   //-----------------------------------------------------------
   debugln( Serial.printf("Temperature Outside: %f °C\n", temperatureModulo) );
