@@ -257,7 +257,7 @@ void loop() {
     debugln("**---Iniciando witch state ---");
     case IDLE:
       // Verifica a umidade do solo
-      if (soilUmUm < limiteUmidade &&tempoIrrigacao> 0) {
+      if (soilCap1 < limiteUmidade &&tempoIrrigacao> 0) {
         // Verifica se o pino da estufa está ligado e desliga se necessário
         if (isSpraying) {
           debugln("**Spray LIGADO Status Check condicao 1");
