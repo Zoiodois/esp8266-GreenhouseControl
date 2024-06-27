@@ -1,16 +1,18 @@
 
 /*******************************************************
  * ESP8266 Saving Values in Ram case internet offline
+ * Live data Feed
+ * Auto Average Calculation
  *Cache Enought for 100Data readings
  *3 Days in hourly Averages Calculation
- * 05/2024 - Felipe Buhrer
+ * 06/2024 - Felipe Buhrer
  */
 /********************************************************
 */
 //Change you Wifi and Gsheets API credentials before use
 
 //Debug State Set
-#define DEBUG 0
+#define DEBUG 1
 
 #if DEBUG == 1
 #define debug(x) Serial.print(x)
@@ -31,16 +33,20 @@
 #include <String>                     //Save Ram Data
 #include <ctime>                      //Save Ram Data
 
-#include "envKeys.h"
+#include "envKeys.h"  //Passwords and Autentications keys
 unsigned long ms = 0;
 unsigned long mr = 0;
 unsigned long lastAttemptedReconnect = 0;
 void tokenStatusCallback(TokenInfo info);
 unsigned long reconnectInterval = 500;
+unsigned long lastConectionTest = 0;  //Test Internet pinging google's IP
+bool updated = 1;
 
 //Variables for testing on Google Sheets
-String sheetAppend = "Dados!";        //Dados
+String sheetAppend = "Medias!";  //Dados
 String sheetValues = "Config!";  // Config
+String sheetLive = "LiveData!";
+//Insert Live Feed
 
 //Temperatura Termistor
 #define Vin 3.25          // define constante igual a 5.0
@@ -70,29 +76,34 @@ float Rout = 0.0;
 //Sensores DHT 11
 #define DHTTYPE DHT11
 DHT dhtModulo(DHTMODULO, DHTTYPE);
-float temperatureModulo = 0.0;
-float humidityModulo = 0.0;
+uint8_t temperatureModulo = 0;
+uint8_t humidityModulo = 0;
 DHT dhtEstufa(DHTESTUFA, DHTTYPE);
-float temperatureEstufa = 0.0;
-float humidityEstufa = 0.0;
+uint8_t temperatureEstufa = 0;
+uint8_t humidityEstufa = 0;
 
 //ALL Sensors
 //Termistor Sensor
-float mediaVaristor = 0.0;
+uint8_t mediaVaristor = 0;
 //LDR sensor
-float lumPC = 0.0;
+uint8_t lumPC = 0;
 //Resistive Soil Moisture
-float soilUmUm = 0.0;
+uint8_t soilUmUm = 0;
+uint8_t AveRes1 = 100;
 //Sensor Umidade Solo Capacitivo 1
-float soilCap1 = 0.0;
+uint8_t soilCap1 = 0;
+uint8_t AveCap1 = 100;
 //Sensor Umidade Solo Capacitivo 2
-float soilCap2 = 0.0;
+uint8_t soilCap2 = 0;
+uint8_t AveCap2 = 100;
 //Average Calculation
 long somatoria = 0;
-int leitura_sensor = 0;
-float media;
-float leitura;
-int NUMERO_AMOSTRAS = 40;  //Number of readings per Average
+uint8_t leitura_sensor = 0;
+uint8_t media;
+uint8_t leitura;
+uint8_t NUMERO_AMOSTRAS = 40;  //Number of readings per Average
+
+//uint8_t averageCalculationInterval = 0;
 
 //Epoch Time Config
 const long utcOffsetInSeconds = -10800;  //Ajuste de data e hora
@@ -100,51 +111,64 @@ const long utcOffsetInSeconds = -10800;  //Ajuste de data e hora
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
 //Variaveis data e hora
-time_t epochTime;
-int monthDay;
-int currentMonth;
-int currentYear;
+time_t epochTime = 1718193152;  //Set if bad conection, first readings may need it.
+uint8_t monthDay;
+uint8_t currentMonth;
+uint16_t currentYear;
 String currentDate;
-char formattedTime[9];
+char formattedTime[20];
 
 
-//---** Variables Changed on Sheets
-//Time to Upate Config Interval
-unsigned long recivingDataInterval = 300000;//5 minutes
-//Greenhous Activity on/off
-bool grenhouseON = 0;
-int limiarEstufa = 80;
+//---** Variables Changed on Sheets Loop Recebedor
 //Variables for cicle Delays and Irrigation system
-int readingInterval = 60000;  // 1min
-int limiteUmidade = 80;      //45%
-unsigned long sendDataInterval = 600000;//10 minutes
-unsigned long averageCalculationInterval = 300000;//5 minutes
+unsigned long readingInterval = 60000;               //1min
+//Greenhour trigger treshhold
+uint16_t limiarEstufa = 80;
+//Greenhous Activity on/off
+bool grenhouseON = 1;
+//Irrigation system Timer
+unsigned long tempoIrrigacao = 0;
+//Lowet humidity before start irrigation
+uint16_t limiteUmidade = 40;                    //45%
+
+//uint32_t sendDataInterval = 3600000;  //1 Hour //REMOVER
+
+//Time to Upate Config Interval
+unsigned long recivingDataInterval = 60000;  //change again 5 minutes
+//Automatic Irrigation System On/Off
+bool autoIr = 0;
+//One time irrigation Start
+bool externalIrReq = 0;
+
+
+
+uint32_t betweenIrInterval = 3600000;
 
 //Counters
 unsigned long lastReading = 0;
 unsigned long lastSendedData = 0;
-unsigned long lastAverage = 0;
 unsigned long lastUpdate = 0;
+unsigned long lastIrrigation = 0;
+unsigned long previousMillis = 0;
+unsigned long irrigationStartMillis = 0;
+uint8_t numAverages = 0;  // Contador de médias calculadas
 
-int numAverages = 0; // Contador de médias calculadas
-unsigned long maxTemp = 0; //Will be updated every cicle and send the max values
-unsigned long minTemp = 80; //Will be updated every cicle and send the min values
+
+uint8_t maxTemp = 0;   //Will be updated every cicle and send the max values
+uint8_t minTemp = 80;  //Will be updated every cicle and send the min values
 
 enum State {
   IDLE,
-  CHECK_SOIL_MOISTURE,
   IRRIGATION_ON,
   IRRIGATION_WAIT,
   IRRIGATION_OFF
 };
 
-State currentState = IDLE;
-unsigned long previousMillis = 0;
-unsigned long irrigationStartMillis = 0;
-unsigned long tempoIrrigacao = 300000;  //5 min
+
 
 // Variáveis globais para armazenar condições
 bool isSpraying = false;
+State currentState = IDLE;
 
 //--------------------------Methods
 //Connect Wifi
@@ -159,7 +183,7 @@ void muxReadings();
 //dht11
 void Load_DHT11_Data();
 //Leitura Sensores Resistivos
-int readPin();
+uint8_t readPin();
 //Mux port selection code
 void selectChannel();
 //Calculate Epoch Dependent Variables
@@ -168,21 +192,48 @@ void epochCalculate(time_t);
 //**Gsheets --
 void tokenStatusCallback();
 //Enviador de Dados
-void loop_enviadorDados();
+void sendLiveData();
 //Recebedor de Dados
 void loop_receberDados();
+//Update External Irrigation Request
+void updateExterReq();
+
+// Struct definition to save all data formats
+struct Dados {
+  time_t epochTime;
+  uint8_t temperatureModulo;
+  uint8_t humidityModulo;
+  uint8_t TempCelsius;
+  uint8_t soilUmUm;
+  uint8_t lumPC;
+  uint8_t soilCap1;
+  uint8_t soilCap2;
+  uint8_t temperatureEstufa;
+  uint8_t humidityEstufa;
+  uint8_t maxTemp;
+  uint8_t minTemp;
+};
+
 
 
 //**Saving data to RAM
 // Struct definition to save all data formats
 struct Dados;
-// Vector para armazenar os conjuntos de dados
-std::vector<Dados> dadosArmazenados; //Uses array in stack for that
-//Method for saving values in RAM
-void saveValues();
-void showDatainRAM();
-void sendRamData();
-void calculateAveragesAndClear();
+//Max reading number before Average Calculation
+const uint8_t numReadings = 60; //***Cahnge to 60
+// Struct Vector to storage readings
+Dados readings[numReadings];
+uint8_t currentIndex = 0;  // Índex for the position
+size_t freeHeap = 0;
+
+//Method for saving values in RAM for 60 readings
+void addReading();
+void calculateAverages();
+void sendAndClearData();
+
+
+// Vector para armazenar os conjuntos de dados das médias ja calculatas
+std::vector<Dados> averageStorage;  //Uses array in stack for that
 
 //--------------Setup
 void setup() {
@@ -239,45 +290,88 @@ void loop() {
 
   unsigned long currentMillis = millis();
 
+  //Mux readings//Maybe cut out
   muxReadings();
   Load_DHT11_Data();
-  debugln("******************");
-  debugln(currentState);
-  debugln("*******");
+
+  timeClient.update();
+  epochTime = timeClient.getEpochTime();
+  epochCalculate(epochTime);
+
+  //debugln("******************");
+  //debugln(currentState);
+  //debugln("*******");
+
+  //Test internet conection pingin google's ip
+  if (currentMillis - lastConectionTest >= 3600000) {
+
+    //Serial.println("chamando o teste de internt");
+    updated = testInternetConnection();
+    lastConectionTest = currentMillis;
+  }
 
   // Updating Data
-  if (currentMillis - lastUpdate > recivingDataInterval) {//1min teste
-      debugln("Updating Values");
-      loop_receberDados();
-      lastUpdate=currentMillis;
+  if (currentMillis - lastUpdate > recivingDataInterval && updated) {  //1min teste
+   Serial.print("Chamando o loop recebedor de dados");
+    //debugln("Updating Values");
+    loop_receberDados();
+    lastUpdate = currentMillis;
+     Serial.print("Deu boa o recebedor de dados");
   }
 
 
+  //External Request of Irrigation Logic
+  if (externalIrReq) {
+
+    // Verifica se o pino da estufa está ligado e desliga se necessário
+    if (isSpraying) {
+      //debugln("**Spray LIGADO Status Check condicao 1");
+      digitalWrite(sprayPin, HIGH);
+      isSpraying = false;
+      //debugln("**Spray DESLIGADO PELA CONDICAO 1");
+    }
+    // Liga o pino de irrigação e marca o início
+    digitalWrite(mudasPin, LOW);
+    // debugln("Relé Irrigação Acionado");
+    irrigationStartMillis = currentMillis;
+    currentState = IRRIGATION_ON;
+    externalIrReq = 0;
+  }
+
+
+  //Irrigation Logic
   switch (currentState) {
-    debugln("**---Iniciando witch state ---");
+
     case IDLE:
-      // Verifica a umidade do solo
-      if (soilCap1 < limiteUmidade &&tempoIrrigacao> 0) {
-        // Verifica se o pino da estufa está ligado e desliga se necessário
+      if (autoIr) {
+        if (currentMillis - lastIrrigation >= betweenIrInterval) {
+          if (AveCap1 < limiteUmidade && tempoIrrigacao > 0) {
+              // Verifica se o pino da estufa está ligado e desliga se necessário
+            if (isSpraying) {
+              //debugln("**Spray LIGADO Status Check condicao 1");
+              digitalWrite(sprayPin, HIGH);
+              isSpraying = false;
+              //debugln("**Spray DESLIGADO PELA CONDICAO 1");
+            }
+            // Liga o pino de irrigação e marca o início
+            digitalWrite(mudasPin, LOW);
+            // debugln("Relé Irrigação Acionado");
+            irrigationStartMillis = currentMillis;
+            currentState = IRRIGATION_ON;
+          }
+        }
+      } else if (grenhouseON && humidityEstufa < limiarEstufa) {
+        if (!isSpraying) {
+          digitalWrite(sprayPin, LOW);
+          isSpraying = true;
+          //debugln("**Spray LIGADO pelo esleif da condição 1");
+        }
+      } else if (!grenhouseON) {
         if (isSpraying) {
-          debugln("**Spray LIGADO Status Check condicao 1");
           digitalWrite(sprayPin, HIGH);
           isSpraying = false;
-          debugln("**Spray DESLIGADO PELA CONDICAO 1");
+          //debugln("**Spray DESLIGADO pelo esleif da condição 1");
         }
-        // Liga o pino de irrigação e marca o início
-        digitalWrite(mudasPin, LOW);
-        debugln("Relé Irrigação Acionado");
-        irrigationStartMillis = currentMillis;
-        currentState = IRRIGATION_ON;
-      } else if (grenhouseON && humidityEstufa < limiarEstufa) {
-        digitalWrite(sprayPin, LOW);
-        isSpraying = true;
-        debugln("**Spray LIGADO pelo esleif da condição 1");
-      } else if (!grenhouseON){
-         digitalWrite(sprayPin, HIGH);
-        isSpraying = false;
-        debugln("**Spray DESLIGADO pelo esleif da condição 1");
       }
       break;
 
@@ -289,81 +383,78 @@ void loop() {
       // Espera até que a duração da irrigação tenha passado
       if (currentMillis - irrigationStartMillis >= tempoIrrigacao) {
         digitalWrite(mudasPin, HIGH);
-        debugln("Relé Irrigação Desligado");
+        // debugln("Relé Irrigação Desligado");
         currentState = IRRIGATION_OFF;
       }
       break;
 
     case IRRIGATION_OFF:
-      debugln("**Iniciando Condição 4");
+      //debugln("**Iniciando Condição 4");
       // Restaura o estado do pino da estufa se necessário
       if (humidityEstufa < limiarEstufa && grenhouseON) {
-        digitalWrite(sprayPin, LOW);
-        debugln("**Spray LIGADO pela condicao 4");
+        if (!isSpraying) {
+          digitalWrite(sprayPin, LOW);
+          isSpraying = true;
+          //debugln("**Spray LIGADO pela condicao 4");
+        }
       }
+      lastIrrigation = currentMillis;
       currentState = IDLE;
-      isSpraying = true;
-
       break;
   }
 
-  bool updated =  testInternetConnection();
-  //Reading Iterval
+
+
+  //Reading Iterval & Live Data Logic
   if (currentMillis - lastReading >= readingInterval) {
 
-    if (WiFi.status() == WL_CONNECTED && updated) {
-
-      timeClient.update();
-      epochTime = timeClient.getEpochTime();
-      saveValues();
-    } else {
-      epochTime = epochTime + (readingInterval / 1000);
-      saveValues();
-    }
-
     lastReading = currentMillis;
+    //sendLiveData();
+    addReading();
   }
+ // Serial.println();
+  //Serial.print("currentIndex: ");
+ // Serial.println(currentIndex);
+  //Serial.println();
+  //Serial.print("Average Store Size: ");
+  //Serial.println(averageStorage.size());
+
 
   //Send Data 
-  if (WiFi.status() == WL_CONNECTED) {
-    // Verificar a conexão com a Internet antes de enviar os dados
-    if (updated) {
-      if (currentMillis - lastSendedData >= sendDataInterval) {
-        calculateSubsetAveragesAndStore();
-        sendRamData();
-        lastSendedData = currentMillis;
+  //Last for EpochLogic
+  if (averageStorage.size() > 100) {
+
+    if (WiFi.status() == WL_CONNECTED) {
+      // Verificar a conexão com a Internet antes de enviar os dados
+      if (updated) {
+        // if (currentMillis - lastSendedData >= sendDataInterval) {
+        //Change here for if have any objetec in average store
+        sendAndClearData();
+        //lastSendedData = currentMillis;
+        // }
+      } else {
+        // Se não houver conexão com a Internet, tentar reconectar
+        if (currentMillis - lastAttemptedReconnect >= reconnectInterval) {
+          lastAttemptedReconnect = currentMillis;
+          connectWiFi();  // Tentar reconectar
+        }
       }
     } else {
-      // Se não houver conexão com a Internet, tentar reconectar
+      // Tentar reconectar se não estiver conectado ao WiFi
       if (currentMillis - lastAttemptedReconnect >= reconnectInterval) {
         lastAttemptedReconnect = currentMillis;
         connectWiFi();  // Tentar reconectar
       }
     }
-  } else {
-    // Tentar reconectar se não estiver conectado ao WiFi
-    if (currentMillis - lastAttemptedReconnect >= reconnectInterval) {
-      lastAttemptedReconnect = currentMillis;
-      connectWiFi();  // Tentar reconectar
-    }
   }
-  // Average Data
-  if (currentMillis - lastAverage > averageCalculationInterval) {//1min teste
-      Serial.println("Invoking AverageAndStore");
-      calculateSubsetAveragesAndStore();
-      lastAverage=currentMillis;
-  }
-
 
 
   // Verifica a quantidade de memória heap livre
-  //size_t freeHeap = ESP.getFreeHeap();
-  //Serial.print("Free heap: ");
-  //Serial.print(freeHeap);
-  //Serial.println(" bytes");
+  freeHeap = ESP.getFreeHeap();
+  Serial.print("Free heap: ");
+  Serial.print(freeHeap);
+  Serial.println(" bytes");
 
   //Serial.print("Tamanho dados armazenados :");
   //Serial.println(dadosArmazenados.size());
-
-
 }

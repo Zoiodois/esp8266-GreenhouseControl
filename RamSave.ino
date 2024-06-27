@@ -1,109 +1,115 @@
-// Struct definition to save all data formats
-struct Dados {
-  time_t epochTime;
-  //String currentDate;
-  //String formattedTime;
-  float temperatureModulo;
-  float humidityModulo;
-  float TempCelsius;
-  float soilUmUm;
-  float lumPC;
-  float soilCap1;
-  float soilCap2;
-  float temperatureEstufa;
-  float humidityEstufa;
-  float maxTemp;
-  float minTemp;
-};
+//Method to add readings to the Average Storage
+void addReading() {
 
-//Method for saving values in RAM
-void saveValues() {
+  Dados dadosDeLeitura;
 
-  debugln("Saving Data on Ram");
+  dadosDeLeitura.temperatureModulo = temperatureModulo;
+  dadosDeLeitura.humidityModulo = humidityModulo;
+  dadosDeLeitura.TempCelsius = TempCelsius;
+  dadosDeLeitura.soilUmUm = soilUmUm;
+  dadosDeLeitura.lumPC = lumPC;
+  dadosDeLeitura.soilCap1 = soilCap1;
+  dadosDeLeitura.soilCap2 = soilCap2;
+  dadosDeLeitura.temperatureEstufa = temperatureEstufa;
+  dadosDeLeitura.humidityEstufa = humidityEstufa;
+  dadosDeLeitura.minTemp = minTemp;
+  dadosDeLeitura.maxTemp = maxTemp;
 
-  Dados dadosEstruturados;
-  dadosEstruturados.epochTime = epochTime;
-  dadosEstruturados.temperatureModulo = temperatureModulo;
-  dadosEstruturados.humidityModulo = humidityModulo;
-  dadosEstruturados.TempCelsius = TempCelsius;
-  dadosEstruturados.soilUmUm = soilUmUm;
-  dadosEstruturados.lumPC = lumPC;
-  dadosEstruturados.soilCap1 = soilCap1;
-  dadosEstruturados.soilCap2 = soilCap2;
-  dadosEstruturados.temperatureEstufa = temperatureEstufa;
-  dadosEstruturados.humidityEstufa = humidityEstufa;
-  dadosEstruturados.minTemp = minTemp;
-  dadosEstruturados.maxTemp = maxTemp;
+  readings[currentIndex] = dadosDeLeitura;
+  currentIndex++;
 
-  // Adicione o conjunto de dados ao vetor dadosArmazenados
-  dadosArmazenados.push_back(dadosEstruturados);
+  // Verifique se completamos um ciclo de 60 leituras
+  if (currentIndex >= numReadings) {
+    // Calcule a média das leituras
+    calculateAverages();
+    // Reinicialize o índice para a próxima rodada de leituras
+    currentIndex = 0;
+  }
 }
 
-void calculateSubsetAveragesAndStore() {
+void calculateAverages() {
 
-  size_t dataStartIndex = numAverages;  // Ignorar as médias já calculadas
-  size_t numElements = dadosArmazenados.size() - dataStartIndex;
+  uint8_t totalTemperatureModulo = 0;
+  uint8_t totalHumidityModulo = 0;
+  uint8_t totalTempCelsius = 0;
+  uint8_t totalSoilUmUm = 0;
+  uint8_t totalLumPC = 0;
+  uint8_t totalSoilCap1 = 0;
+  uint8_t totalSoilCap2 = 0;
+  uint8_t totalTemperatureEstufa = 0;
+  uint8_t totalHumidityEstufa = 0;
+  uint8_t holdMinTemp = 0;
+  uint8_t holdMaxTemp = 0;
+  uint8_t tempMaxTemp = 0;
+  uint8_t tempMinTemp = 80;
 
-  if (numElements == 0) {
-    // Não há dados novos para processar
-    return;
+  for (uint8_t i = 0; i < numReadings; i++) {
+    totalTemperatureModulo += readings[i].temperatureModulo;
+    totalHumidityModulo += readings[i].humidityModulo;
+    totalTempCelsius += readings[i].TempCelsius;
+    totalSoilUmUm += readings[i].soilUmUm;
+    totalLumPC += readings[i].lumPC;
+    totalSoilCap1 += readings[i].soilCap1;
+    totalSoilCap2 += readings[i].soilCap2;
+    totalTemperatureEstufa += readings[i].temperatureEstufa;
+    totalHumidityEstufa += readings[i].humidityEstufa;
+    holdMaxTemp = readings[i].maxTemp;
+    holdMinTemp = readings[i].minTemp;
+
+    if (holdMaxTemp > tempMaxTemp) {
+      tempMaxTemp = holdMaxTemp;
+    }
+
+    if (holdMinTemp < tempMinTemp) {
+      tempMinTemp = holdMinTemp;
+    }
   }
 
-  float totalEpoochTime = 0;
-  float totalTemperatureModulo = 0;
-  float totalHumidityModulo = 0;
-  float totalTempCelsius = 0;
-  float totalSoilUmUm = 0;
-  float totalLumPC = 0;
-  float totalSoilCap1 = 0;
-  float totalSoilCap2 = 0;
-  float totalTemperatureEstufa = 0;
-  float totalHumidityEstufa = 0;
-  float totalMaxTemp = 0;
-  float totalMinTemp = 80;
+  Dados averageReading;
+  //Time data will be avaiable through Global Var
 
-  for (size_t j = dataStartIndex; j < dadosArmazenados.size(); ++j) {
-    totalEpoochTime += dadosArmazenados[j].epochTime;
-    totalTemperatureModulo += dadosArmazenados[j].temperatureModulo;
-    totalHumidityModulo += dadosArmazenados[j].humidityModulo;
-    totalTempCelsius += dadosArmazenados[j].TempCelsius;
-    totalSoilUmUm += dadosArmazenados[j].soilUmUm;
-    totalLumPC += dadosArmazenados[j].lumPC;
-    totalSoilCap1 += dadosArmazenados[j].soilCap1;
-    totalSoilCap2 += dadosArmazenados[j].soilCap2;
-    totalTemperatureEstufa += dadosArmazenados[j].temperatureEstufa;
-    totalHumidityEstufa += dadosArmazenados[j].humidityEstufa;
-    totalMaxTemp = max(totalMaxTemp, dadosArmazenados[j].maxTemp);
-    totalMinTemp = min(totalMinTemp, dadosArmazenados[j].minTemp);
+  averageReading.epochTime = epochTime;
+  averageReading.temperatureModulo = totalTemperatureModulo / numReadings;
+  averageReading.humidityModulo = totalHumidityModulo / numReadings;
+  averageReading.TempCelsius = totalTempCelsius / numReadings;
+  averageReading.soilUmUm = totalSoilUmUm / numReadings;
+  averageReading.lumPC = totalLumPC / numReadings;
+  averageReading.soilCap1 = totalSoilCap1 / numReadings;
+  averageReading.soilCap2 = totalSoilCap2 / numReadings;
+  averageReading.temperatureEstufa = totalTemperatureEstufa / numReadings;
+  averageReading.humidityEstufa = totalHumidityEstufa / numReadings;
+  averageReading.minTemp = tempMinTemp;
+  averageReading.maxTemp = tempMaxTemp;
+
+  uint8_t tempSoilUmUm = averageReading.soilUmUm;
+  uint8_t tempsoilCap1 = averageReading.soilCap1;
+  uint8_t tempsoilCap2 = averageReading.soilCap2;
+  //updating the Fix Values
+  if (tempSoilUmUm > 100) {
+    AveRes1 = 100;
+  } else {
+    AveRes1 = tempSoilUmUm;
   }
 
-  Dados averageData;
-  averageData.epochTime = totalEpoochTime / numElements;
-  averageData.temperatureModulo = totalTemperatureModulo / numElements;
-  averageData.humidityModulo = totalHumidityModulo / numElements;
-  averageData.TempCelsius = totalTempCelsius / numElements;
-  averageData.soilUmUm = totalSoilUmUm / numElements;
-  averageData.lumPC = totalLumPC / numElements;
-  averageData.soilCap1 = totalSoilCap1 / numElements;
-  averageData.soilCap2 = totalSoilCap2 / numElements;
-  averageData.temperatureEstufa = totalTemperatureEstufa / numElements;
-  averageData.humidityEstufa = totalHumidityEstufa / numElements;
-  averageData.maxTemp = totalMaxTemp;
-  averageData.minTemp = totalMinTemp;
+  if (tempsoilCap1 > 100) {
+    AveCap1 = 100;
+  } else {
+    AveCap1 = tempsoilCap1;
+  }
 
-  // Incrementar o número de médias calculadas
-  numAverages++;
-  Serial.print("Número de Médias no arquivo: ");
-  Serial.println(numAverages);
+  if (tempsoilCap2 > 100) {
+    AveCap2 = 100;
+  } else {
+    AveCap2 = tempsoilCap2;
+  }
 
-  // Remover os dados processados
-  dadosArmazenados.erase(dadosArmazenados.begin() + dataStartIndex, dadosArmazenados.end());
+  //Reset Temperature data
+  maxTemp = 0;
+  minTemp = 80;
 
-  // Inserir a nova média no final
-  dadosArmazenados.push_back(averageData);
-
-  lastAverage = millis();  // Atualiza o último tempo de cálculo da média
+  averageStorage.push_back(averageReading);
 }
+
 
 /*
 //Function not in use, but working
